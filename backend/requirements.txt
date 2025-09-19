@@ -7,6 +7,7 @@ zeroconf==0.131.0
 pydantic==2.5.0
 python-dateutil==2.8.2
 ollama==0.1.7
+llama-cpp-python==0.2.11
 psutil==5.9.6
 cryptography==41.0.8
 pyinstaller==6.2.0

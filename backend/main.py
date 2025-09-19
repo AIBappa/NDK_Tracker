@@ -9,8 +9,54 @@ from io import BytesIO
 import base64
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddlewa            return self._fallback_processing(user_input, context)
+        
+        # Behavior keywords
+        behavior_words = ["happy", "sad", "angry", "calm", "meltdown", "behavior"]
+        if any(word in input_lower for word in behavior_words):
+            extracted_data["behavior"].append(user_input)
+        
+        return {
+            "extracted_data": extracted_data,
+            "missing_info": [],
+            "clarification_question": None,
+            "confidence": 0.6
+        }
+    
+    def switch_backend(self, backend: str, model_name: str = None):
+        """Switch LLM backend at runtime"""
+        if model_name:
+            self.model_name = model_name
+            
+        if backend == "ollama" and self.ollama_available:
+            self.llm_backend = "ollama"
+            print(f"Switched to Ollama backend with model: {self.model_name}")
+        elif backend == "llamacpp" and self.llamacpp_available:
+            self.llm_backend = "llamacpp"
+            if not self.llm_instance or model_name:
+                self._init_llamacpp()
+            print(f"Switched to llama.cpp backend with model: {self.model_name}")
+        else:
+            print(f"Backend {backend} not available")
+    
+    def get_available_backends(self):
+        """Get list of available LLM backends"""
+        backends = []
+        if self.ollama_available:
+            backends.append("ollama")
+        if self.llamacpp_available:
+            backends.append("llamacpp")
+        return backends
+    
+    def get_status(self):
+        """Get current LLM processor status"""
+        return {
+            "current_backend": self.llm_backend,
+            "current_model": self.model_name,
+            "ollama_available": self.ollama_available,
+            "llamacpp_available": self.llamacpp_available,
+            "available_backends": self.get_available_backends()
+        }api.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from zeroconf import ServiceInfo, Zeroconf
@@ -34,6 +80,7 @@ class ScheduleConfig(BaseModel):
 class SettingsConfig(BaseModel):
     input_mode: str = "voice"  # voice, text, both
     llm_model: str = "llama2"
+    llm_backend: str = "ollama"  # ollama, llamacpp
     theme: str = "light"
     accessibility: Dict[str, Any] = {}
 
@@ -118,10 +165,31 @@ class DataManager:
 class LLMProcessor:
     """Handles local LLM processing for conversation and data extraction"""
     
-    def __init__(self, model_name: str = "llama2"):
+    def __init__(self, model_name: str = "llama2", llm_backend: str = "ollama"):
         self.model_name = model_name
+        self.llm_backend = llm_backend  # "ollama" or "llamacpp"
         self.ollama_available = False
+        self.llamacpp_available = False
+        self.llm_instance = None
+        
+        # Check available backends
         self._check_ollama()
+        self._check_llamacpp()
+        
+        # Select the best available backend
+        if llm_backend == "llamacpp" and self.llamacpp_available:
+            self._init_llamacpp()
+        elif llm_backend == "ollama" and self.ollama_available:
+            pass  # Ollama doesn't need initialization
+        elif self.ollama_available:
+            self.llm_backend = "ollama"
+            print("Falling back to Ollama")
+        elif self.llamacpp_available:
+            self.llm_backend = "llamacpp" 
+            self._init_llamacpp()
+            print("Falling back to llama.cpp")
+        else:
+            print("No LLM backend available, using keyword fallback")
     
     def _check_ollama(self):
         """Check if Ollama is available"""
@@ -130,15 +198,74 @@ class LLMProcessor:
             # Test connection
             ollama.list()
             self.ollama_available = True
+            print("Ollama backend available")
         except Exception as e:
             print(f"Ollama not available: {e}")
             self.ollama_available = False
     
+    def _check_llamacpp(self):
+        """Check if llama-cpp-python is available"""
+        try:
+            from llama_cpp import Llama
+            self.llamacpp_available = True
+            print("llama.cpp backend available")
+        except ImportError as e:
+            print(f"llama.cpp not available: {e}")
+            self.llamacpp_available = False
+    
+    def _init_llamacpp(self):
+        """Initialize llama.cpp model"""
+        try:
+            from llama_cpp import Llama
+            
+            # Map model names to file paths
+            model_paths = {
+                "llama2": "./models/llama-2-7b-chat.Q4_K_M.gguf",
+                "llama3": "./models/llama-3-8b-instruct.Q4_K_M.gguf", 
+                "mistral": "./models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+                "codellama": "./models/codellama-7b-instruct.Q4_K_M.gguf"
+            }
+            
+            model_path = model_paths.get(self.model_name)
+            if not model_path or not Path(model_path).exists():
+                # Try to find any .gguf model in models directory
+                models_dir = Path("./models")
+                if models_dir.exists():
+                    gguf_files = list(models_dir.glob("*.gguf"))
+                    if gguf_files:
+                        model_path = str(gguf_files[0])
+                        print(f"Using model: {model_path}")
+                    else:
+                        raise FileNotFoundError("No .gguf models found in ./models/ directory")
+                else:
+                    raise FileNotFoundError("./models/ directory not found")
+            
+            # Initialize llama.cpp with optimized settings
+            self.llm_instance = Llama(
+                model_path=model_path,
+                n_ctx=2048,  # Context window
+                n_threads=None,  # Use all available threads
+                n_gpu_layers=0,  # Use GPU if available (set to -1 for full GPU)
+                verbose=False
+            )
+            print(f"llama.cpp initialized with model: {model_path}")
+            
+        except Exception as e:
+            print(f"Failed to initialize llama.cpp: {e}")
+            self.llamacpp_available = False
+            self.llm_instance = None
+    
     def process_input(self, user_input: str, context: Dict = None) -> Dict:
         """Process user input and extract structured data"""
-        if not self.ollama_available:
+        if self.llm_backend == "ollama" and self.ollama_available:
+            return self._process_with_ollama(user_input, context)
+        elif self.llm_backend == "llamacpp" and self.llamacpp_available:
+            return self._process_with_llamacpp(user_input, context)
+        else:
             return self._fallback_processing(user_input, context)
-        
+    
+    def _process_with_ollama(self, user_input: str, context: Dict = None) -> Dict:
+        """Process input using Ollama"""
         try:
             import ollama
             
@@ -149,7 +276,34 @@ class LLMProcessor:
             return self._parse_llm_response(response['response'], user_input)
             
         except Exception as e:
-            print(f"LLM processing error: {e}")
+            print(f"Ollama processing error: {e}")
+            return self._fallback_processing(user_input, context)
+    
+    def _process_with_llamacpp(self, user_input: str, context: Dict = None) -> Dict:
+        """Process input using llama.cpp"""
+        try:
+            if not self.llm_instance:
+                raise Exception("llama.cpp model not initialized")
+            
+            prompt = self._build_extraction_prompt(user_input, context)
+            
+            # Generate response using llama.cpp
+            response = self.llm_instance(
+                prompt,
+                max_tokens=512,
+                temperature=0.7,
+                top_p=0.9,
+                echo=False,
+                stop=["</s>", "\n\n"]
+            )
+            
+            response_text = response['choices'][0]['text'].strip()
+            
+            # Parse the LLM response
+            return self._parse_llm_response(response_text, user_input)
+            
+        except Exception as e:
+            print(f"llama.cpp processing error: {e}")
             return self._fallback_processing(user_input, context)
     
     def _build_extraction_prompt(self, user_input: str, context: Dict = None) -> str:
@@ -238,8 +392,43 @@ Respond in JSON format:
             "clarification_question": None,
             "confidence": 0.6
         }
+    
+    def switch_backend(self, backend: str, model_name: str = None):
+        """Switch LLM backend at runtime"""
+        if model_name:
+            self.model_name = model_name
+            
+        if backend == "ollama" and self.ollama_available:
+            self.llm_backend = "ollama"
+            print(f"Switched to Ollama backend with model: {self.model_name}")
+        elif backend == "llamacpp" and self.llamacpp_available:
+            self.llm_backend = "llamacpp"
+            if not self.llm_instance or model_name:
+                self._init_llamacpp()
+            print(f"Switched to llama.cpp backend with model: {self.model_name}")
+        else:
+            print(f"Backend {backend} not available")
+    
+    def get_available_backends(self):
+        """Get list of available LLM backends"""
+        backends = []
+        if self.ollama_available:
+            backends.append("ollama")
+        if self.llamacpp_available:
+            backends.append("llamacpp")
+        return backends
+    
+    def get_status(self):
+        """Get current LLM processor status"""
+        return {
+            "current_backend": self.llm_backend,
+            "current_model": self.model_name,
+            "ollama_available": self.ollama_available,
+            "llamacpp_available": self.llamacpp_available,
+            "available_backends": self.get_available_backends()
+        }
 
-# Initialize LLM processor
+# Initialize LLM processor with default settings
 llm_processor = LLMProcessor()
 
 def get_local_ip():
@@ -495,9 +684,10 @@ async def update_settings(settings: SettingsConfig):
     with open(SETTINGS_FILE, 'w') as f:
         json.dump(settings_dict, f, indent=2)
     
-    # Update LLM model if changed
-    if settings.llm_model != llm_processor.model_name:
-        llm_processor.model_name = settings.llm_model
+    # Update LLM configuration if changed
+    if (settings.llm_model != llm_processor.model_name or 
+        settings.llm_backend != llm_processor.llm_backend):
+        llm_processor.switch_backend(settings.llm_backend, settings.llm_model)
     
     return {"success": True, "settings": settings_dict}
 
@@ -529,13 +719,55 @@ async def update_schedule(schedule: ScheduleConfig):
     
     return {"success": True, "schedule": schedule_dict}
 
+@app.get("/llm/status")
+async def get_llm_status():
+    """Get LLM backend status and configuration"""
+    return llm_processor.get_status()
+
+@app.post("/llm/switch")
+async def switch_llm_backend(backend: str, model_name: Optional[str] = None):
+    """Switch LLM backend and optionally change model"""
+    llm_processor.switch_backend(backend, model_name)
+    return {
+        "success": True,
+        "new_status": llm_processor.get_status()
+    }
+
+@app.get("/llm/models")
+async def get_available_models():
+    """Get available models for current backend"""
+    if llm_processor.llm_backend == "ollama" and llm_processor.ollama_available:
+        try:
+            import ollama
+            models = ollama.list()
+            return {
+                "backend": "ollama",
+                "models": [model["name"] for model in models.get("models", [])]
+            }
+        except Exception as e:
+            return {"backend": "ollama", "models": [], "error": str(e)}
+    
+    elif llm_processor.llm_backend == "llamacpp":
+        # List available .gguf files in models directory
+        models_dir = Path("./models")
+        if models_dir.exists():
+            gguf_files = [f.stem for f in models_dir.glob("*.gguf")]
+            return {
+                "backend": "llamacpp", 
+                "models": gguf_files
+            }
+        else:
+            return {"backend": "llamacpp", "models": [], "error": "Models directory not found"}
+    
+    return {"backend": "none", "models": []}
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "llm_available": llm_processor.ollama_available,
+        "llm_status": llm_processor.get_status(),
         "active_sessions": len(active_sessions)
     }
 
