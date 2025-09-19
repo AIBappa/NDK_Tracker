@@ -6,3 +6,4 @@ backend/build/
 
 # Ignore binary file(s)
 backend/dist/autism_tracker_setup
+backend/dist/autism_tracker_setup.exe

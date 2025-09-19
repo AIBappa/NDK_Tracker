@@ -77,10 +77,47 @@ All data is stored locally in the `./data/` directory:
 
 ## Building Executable
 
-To create a standalone .exe file:
+### Platform Requirements
+
+**⚠️ Important**: PyInstaller builds executables for the platform where it runs:
+- **Windows → Windows .exe** (for Windows 11 users)
+- **WSL/Linux → Linux binary** (won't run on Windows)
+
+### Windows Build (Recommended for Windows 11)
+
+Build on Windows PowerShell/CMD for Windows 11 compatibility:
+
+```powershell
+# Create virtual environment (recommended)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install dependencies and build tools
+pip install -r requirements.txt
+pip install pyinstaller
+
+# Build Windows executable
+pyinstaller --onefile --name autism_tracker_backend main.py
+```
+
+### WSL/Linux Build
+
+For WSL users (creates Linux binary only):
 
 ```bash
+# Install system dependencies first
+sudo apt update
+sudo apt install -y python3-full python3-venv build-essential cmake libomp-dev
+
+# Create virtual environment (required for PEP 668)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install Python dependencies
+pip install -r requirements.txt
 pip install pyinstaller
+
+# Build Linux binary (NOT Windows compatible)
 pyinstaller --onefile --name autism_tracker_backend main.py
 ```
 
@@ -92,11 +129,37 @@ For the easiest deployment, use the minimal setup that includes everything in on
 
 ### Build Minimal Setup Executable
 
-```bash
-# Install PyInstaller if not already installed
+**For Windows 11 executable (build on Windows):**
+
+```powershell
+# Create virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install dependencies
+pip install -r requirements.txt
 pip install pyinstaller
 
-# Build the minimal setup executable
+# Build Windows executable
+pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
+```
+
+**For WSL users (Linux binary only):**
+
+```bash
+# Install system dependencies
+sudo apt update
+sudo apt install -y python3-full python3-venv build-essential cmake libomp-dev
+
+# Create virtual environment (required for PEP 668)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install pyinstaller
+
+# Build Linux binary
 pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
 ```
 
