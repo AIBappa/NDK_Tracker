@@ -11,3 +11,4 @@ llama-cpp-python==0.2.11
 psutil==5.9.6
 cryptography==46.0.0
 pyinstaller>=6.0.0
+requests==2.32.2
