@@ -9,54 +9,9 @@ from io import BytesIO
 import base64
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddlewa            return self._fallback_processing(user_input, context)
-        
-        # Behavior keywords
-        behavior_words = ["happy", "sad", "angry", "calm", "meltdown", "behavior"]
-        if any(word in input_lower for word in behavior_words):
-            extracted_data["behavior"].append(user_input)
-        
-        return {
-            "extracted_data": extracted_data,
-            "missing_info": [],
-            "clarification_question": None,
-            "confidence": 0.6
-        }
-    
-    def switch_backend(self, backend: str, model_name: str = None):
-        """Switch LLM backend at runtime"""
-        if model_name:
-            self.model_name = model_name
-            
-        if backend == "ollama" and self.ollama_available:
-            self.llm_backend = "ollama"
-            print(f"Switched to Ollama backend with model: {self.model_name}")
-        elif backend == "llamacpp" and self.llamacpp_available:
-            self.llm_backend = "llamacpp"
-            if not self.llm_instance or model_name:
-                self._init_llamacpp()
-            print(f"Switched to llama.cpp backend with model: {self.model_name}")
-        else:
-            print(f"Backend {backend} not available")
-    
-    def get_available_backends(self):
-        """Get list of available LLM backends"""
-        backends = []
-        if self.ollama_available:
-            backends.append("ollama")
-        if self.llamacpp_available:
-            backends.append("llamacpp")
-        return backends
-    
-    def get_status(self):
-        """Get current LLM processor status"""
-        return {
-            "current_backend": self.llm_backend,
-            "current_model": self.model_name,
-            "ollama_available": self.ollama_available,
-            "llamacpp_available": self.llamacpp_available,
-            "available_backends": self.get_available_backends()
-        }api.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from zeroconf import ServiceInfo, Zeroconf
