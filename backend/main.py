@@ -1,0 +1,562 @@
+import os
+import json
+import socket
+from datetime import datetime, timezone, timedelta
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+import qrcode
+from io import BytesIO
+import base64
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
+from zeroconf import ServiceInfo, Zeroconf
+import threading
+import time
+
+# Data models
+class LogEntry(BaseModel):
+    message: str
+    voice_input: bool = False
+    session_id: Optional[str] = None
+
+class ClarificationResponse(BaseModel):
+    response: str
+    session_id: str
+
+class ScheduleConfig(BaseModel):
+    reminders: List[Dict[str, Any]]
+    timezone: str = "UTC"
+
+class SettingsConfig(BaseModel):
+    input_mode: str = "voice"  # voice, text, both
+    llm_model: str = "llama2"
+    theme: str = "light"
+    accessibility: Dict[str, Any] = {}
+
+# Initialize FastAPI app
+app = FastAPI(title="Autism Tracker Backend", version="1.0.0")
+
+# CORS middleware to allow PWA access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict to known origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Data storage paths
+DATA_DIR = Path("./data")
+SESSIONS_DIR = DATA_DIR / "sessions"
+SETTINGS_FILE = DATA_DIR / "settings.json"
+SCHEDULE_FILE = DATA_DIR / "schedule.json"
+
+# Ensure data directories exist
+DATA_DIR.mkdir(exist_ok=True)
+SESSIONS_DIR.mkdir(exist_ok=True)
+
+# In-memory session storage for ongoing conversations
+active_sessions: Dict[str, Dict] = {}
+
+class DataManager:
+    """Manages local JSON file storage"""
+    
+    @staticmethod
+    def save_session(session_data: Dict) -> str:
+        """Save a complete session to daily JSON file"""
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        file_path = SESSIONS_DIR / f"{date_str}.json"
+        
+        # Load existing data or create new
+        if file_path.exists():
+            with open(file_path, 'r') as f:
+                daily_data = json.load(f)
+        else:
+            daily_data = {"date": date_str, "sessions": []}
+        
+        # Add new session
+        daily_data["sessions"].append(session_data)
+        
+        # Save back to file
+        with open(file_path, 'w') as f:
+            json.dump(daily_data, f, indent=2, default=str)
+        
+        return str(file_path)
+    
+    @staticmethod
+    def get_daily_data(date: str) -> Dict:
+        """Retrieve data for a specific date"""
+        file_path = SESSIONS_DIR / f"{date}.json"
+        if file_path.exists():
+            with open(file_path, 'r') as f:
+                return json.load(f)
+        return {"date": date, "sessions": []}
+    
+    @staticmethod
+    def get_date_range_data(start_date: str, end_date: str) -> List[Dict]:
+        """Get data for a date range"""
+        # Simple implementation - can be optimized
+        from dateutil.parser import parse
+        from dateutil.rrule import rrule, DAILY
+        
+        start = parse(start_date).date()
+        end = parse(end_date).date()
+        
+        data = []
+        for dt in rrule(DAILY, dtstart=start, until=end):
+            date_str = dt.strftime("%Y-%m-%d")
+            daily_data = DataManager.get_daily_data(date_str)
+            if daily_data["sessions"]:
+                data.append(daily_data)
+        
+        return data
+
+class LLMProcessor:
+    """Handles local LLM processing for conversation and data extraction"""
+    
+    def __init__(self, model_name: str = "llama2"):
+        self.model_name = model_name
+        self.ollama_available = False
+        self._check_ollama()
+    
+    def _check_ollama(self):
+        """Check if Ollama is available"""
+        try:
+            import ollama
+            # Test connection
+            ollama.list()
+            self.ollama_available = True
+        except Exception as e:
+            print(f"Ollama not available: {e}")
+            self.ollama_available = False
+    
+    def process_input(self, user_input: str, context: Dict = None) -> Dict:
+        """Process user input and extract structured data"""
+        if not self.ollama_available:
+            return self._fallback_processing(user_input, context)
+        
+        try:
+            import ollama
+            
+            prompt = self._build_extraction_prompt(user_input, context)
+            response = ollama.generate(model=self.model_name, prompt=prompt)
+            
+            # Parse the LLM response
+            return self._parse_llm_response(response['response'], user_input)
+            
+        except Exception as e:
+            print(f"LLM processing error: {e}")
+            return self._fallback_processing(user_input, context)
+    
+    def _build_extraction_prompt(self, user_input: str, context: Dict = None) -> str:
+        """Build prompt for data extraction"""
+        prompt = f"""
+You are helping extract structured data from user input about daily activities for a neurodiverse child.
+
+Categories to extract:
+- food: what was eaten
+- medication: any meds taken  
+- behavior: mood, activities, incidents
+- exercise: physical activities
+- water: fluid intake
+- potty: bathroom activities
+- school: feedback, events, notes
+
+User input: "{user_input}"
+
+Please extract relevant information and identify any missing details that need clarification.
+
+Respond in JSON format:
+{{
+    "extracted_data": {{
+        "food": [],
+        "medication": [],
+        "behavior": [],
+        "exercise": [],
+        "water": [],
+        "potty": [],
+        "school": []
+    }},
+    "missing_info": [],
+    "clarification_question": "optional question if info is missing or unclear",
+    "confidence": 0.8
+}}
+"""
+        return prompt
+    
+    def _parse_llm_response(self, response: str, original_input: str) -> Dict:
+        """Parse LLM JSON response"""
+        try:
+            # Try to extract JSON from response
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+        except:
+            pass
+        
+        # Fallback if JSON parsing fails
+        return self._fallback_processing(original_input)
+    
+    def _fallback_processing(self, user_input: str, context: Dict = None) -> Dict:
+        """Simple keyword-based processing when LLM unavailable"""
+        extracted_data = {
+            "food": [],
+            "medication": [],
+            "behavior": [],
+            "exercise": [],
+            "water": [],
+            "potty": [],
+            "school": []
+        }
+        
+        # Simple keyword matching
+        input_lower = user_input.lower()
+        
+        # Food keywords
+        food_words = ["ate", "food", "lunch", "dinner", "breakfast", "snack", "drink"]
+        if any(word in input_lower for word in food_words):
+            extracted_data["food"].append(user_input)
+        
+        # Medication keywords
+        med_words = ["medication", "medicine", "pill", "dose", "took"]
+        if any(word in input_lower for word in med_words):
+            extracted_data["medication"].append(user_input)
+        
+        # Behavior keywords
+        behavior_words = ["happy", "sad", "angry", "calm", "meltdown", "behavior"]
+        if any(word in input_lower for word in behavior_words):
+            extracted_data["behavior"].append(user_input)
+        
+        return {
+            "extracted_data": extracted_data,
+            "missing_info": [],
+            "clarification_question": None,
+            "confidence": 0.6
+        }
+
+# Initialize LLM processor
+llm_processor = LLMProcessor()
+
+def get_local_ip():
+    """Get the local IP address"""
+    try:
+        # Connect to a remote address to get local IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except:
+        return "127.0.0.1"
+
+def generate_qr_code(data: str) -> str:
+    """Generate QR code as base64 image"""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to base64
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return f"data:image/png;base64,{img_str}"
+
+# API Endpoints
+
+@app.get("/")
+async def root():
+    """Root endpoint with pairing information"""
+    local_ip = get_local_ip()
+    port = 8080  # Default port
+    endpoint_url = f"http://{local_ip}:{port}"
+    
+    return {
+        "message": "Autism Tracker Backend",
+        "status": "running",
+        "pairing_info": {
+            "endpoint": endpoint_url,
+            "qr_code": generate_qr_code(endpoint_url),
+            "local_ip": local_ip,
+            "port": port
+        }
+    }
+
+@app.get("/pairing/info")
+async def get_pairing_info():
+    """Get pairing information for QR code display"""
+    local_ip = get_local_ip()
+    port = 8080
+    endpoint_url = f"http://{local_ip}:{port}"
+    
+    return {
+        "endpoint": endpoint_url,
+        "qr_code": generate_qr_code(endpoint_url),
+        "local_ip": local_ip,
+        "port": port,
+        "instructions": [
+            "1. Open the Autism Tracker PWA on your mobile device",
+            "2. Tap 'Scan QR to pair' on the PWA",
+            "3. Point your device camera at the QR code above",
+            "4. Your device will automatically connect to this backend"
+        ]
+    }
+
+@app.post("/input/log")
+async def log_entry(entry: LogEntry):
+    """Process and log a new entry"""
+    session_id = entry.session_id or f"session_{int(time.time())}"
+    
+    # Process input with LLM
+    processed = llm_processor.process_input(entry.message)
+    
+    # Create or update session
+    if session_id not in active_sessions:
+        active_sessions[session_id] = {
+            "session_id": session_id,
+            "start_time": datetime.now(timezone.utc).isoformat(),
+            "conversation": [],
+            "raw_text_aggregate": "",
+            "structured_data": {},
+            "status": "in_progress"
+        }
+    
+    session = active_sessions[session_id]
+    
+    # Add to conversation history
+    session["conversation"].append({
+        "from": "user",
+        "message": entry.message,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "voice_input": entry.voice_input
+    })
+    
+    # Update aggregated text
+    session["raw_text_aggregate"] += f" {entry.message}"
+    
+    # Update structured data
+    for category, data in processed["extracted_data"].items():
+        if data:
+            if category not in session["structured_data"]:
+                session["structured_data"][category] = []
+            session["structured_data"][category].extend(data)
+    
+    # Check if clarification needed
+    response_data = {
+        "session_id": session_id,
+        "processed_data": processed,
+        "session_complete": False
+    }
+    
+    if processed.get("clarification_question"):
+        # Add app response to conversation
+        session["conversation"].append({
+            "from": "app",
+            "message": processed["clarification_question"],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        response_data["clarification_needed"] = True
+        response_data["question"] = processed["clarification_question"]
+    else:
+        # Session might be complete
+        response_data["clarification_needed"] = False
+        response_data["ready_to_save"] = True
+    
+    return response_data
+
+@app.post("/input/clarify")
+async def clarify_entry(clarification: ClarificationResponse):
+    """Handle clarification response"""
+    session_id = clarification.session_id
+    
+    if session_id not in active_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Process clarification
+    entry = LogEntry(
+        message=clarification.response,
+        session_id=session_id
+    )
+    
+    return await log_entry(entry)
+
+@app.post("/input/save_session")
+async def save_session(session_data: Dict):
+    """Save a completed session"""
+    session_id = session_data.get("session_id")
+    
+    if session_id and session_id in active_sessions:
+        session = active_sessions[session_id]
+        session["status"] = "completed"
+        session["end_time"] = datetime.now(timezone.utc).isoformat()
+        
+        # Save to file
+        file_path = DataManager.save_session(session)
+        
+        # Remove from active sessions
+        del active_sessions[session_id]
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "saved_to": file_path
+        }
+    
+    raise HTTPException(status_code=400, detail="Invalid session")
+
+@app.get("/data/summary")
+async def get_data_summary(date: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get daily or date range summary"""
+    if date:
+        return DataManager.get_daily_data(date)
+    elif start_date and end_date:
+        return DataManager.get_date_range_data(start_date, end_date)
+    else:
+        # Default to today
+        today = datetime.now().strftime("%Y-%m-%d")
+        return DataManager.get_daily_data(today)
+
+@app.get("/timeline/view")
+async def get_timeline_data(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get timeline visualization data"""
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    if not end_date:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+    
+    data = DataManager.get_date_range_data(start_date, end_date)
+    
+    # Transform for timeline visualization
+    timeline_items = []
+    
+    for daily_data in data:
+        for session in daily_data["sessions"]:
+            for category, items in session.get("structured_data", {}).items():
+                for item in items:
+                    timeline_items.append({
+                        "id": f"{session['session_id']}_{category}_{len(timeline_items)}",
+                        "content": str(item),
+                        "start": session.get("start_time", daily_data["date"]),
+                        "group": category,
+                        "category": category,
+                        "session_id": session["session_id"]
+                    })
+    
+    return {
+        "items": timeline_items,
+        "groups": [
+            {"id": "food", "content": "Food"},
+            {"id": "medication", "content": "Medication"},
+            {"id": "behavior", "content": "Behavior"},
+            {"id": "exercise", "content": "Exercise"},
+            {"id": "water", "content": "Water"},
+            {"id": "potty", "content": "Potty"},
+            {"id": "school", "content": "School"}
+        ]
+    }
+
+@app.get("/settings")
+async def get_settings():
+    """Get current settings"""
+    if SETTINGS_FILE.exists():
+        with open(SETTINGS_FILE, 'r') as f:
+            return json.load(f)
+    
+    # Return defaults
+    return {
+        "input_mode": "voice",
+        "llm_model": "llama2",
+        "theme": "light",
+        "accessibility": {
+            "high_contrast": False,
+            "large_text": False,
+            "screen_reader": False
+        }
+    }
+
+@app.post("/settings")
+async def update_settings(settings: SettingsConfig):
+    """Update settings"""
+    settings_dict = settings.dict()
+    
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(settings_dict, f, indent=2)
+    
+    # Update LLM model if changed
+    if settings.llm_model != llm_processor.model_name:
+        llm_processor.model_name = settings.llm_model
+    
+    return {"success": True, "settings": settings_dict}
+
+@app.get("/setup/schedule")
+async def get_schedule():
+    """Get current schedule configuration"""
+    if SCHEDULE_FILE.exists():
+        with open(SCHEDULE_FILE, 'r') as f:
+            return json.load(f)
+    
+    # Return default schedule
+    return {
+        "reminders": [
+            {"time": "08:00", "type": "breakfast", "enabled": True},
+            {"time": "12:00", "type": "lunch", "enabled": True},
+            {"time": "18:00", "type": "dinner", "enabled": True},
+            {"time": "20:00", "type": "bedtime_routine", "enabled": True}
+        ],
+        "timezone": "UTC"
+    }
+
+@app.post("/setup/schedule")
+async def update_schedule(schedule: ScheduleConfig):
+    """Update schedule configuration"""
+    schedule_dict = schedule.dict()
+    
+    with open(SCHEDULE_FILE, 'w') as f:
+        json.dump(schedule_dict, f, indent=2)
+    
+    return {"success": True, "schedule": schedule_dict}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "llm_available": llm_processor.ollama_available,
+        "active_sessions": len(active_sessions)
+    }
+
+# Development server
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Autism Tracker Backend')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
+    parser.add_argument('--port', type=int, default=8080, help='Port to bind to')
+    parser.add_argument('--reload', action='store_true', help='Enable auto-reload for development')
+    
+    args = parser.parse_args()
+    
+    print(f"Starting Autism Tracker Backend on {args.host}:{args.port}")
+    print(f"Local IP: {get_local_ip()}")
+    print(f"LLM Available: {llm_processor.ollama_available}")
+    
+    uvicorn.run(
+        "main:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload
+    )

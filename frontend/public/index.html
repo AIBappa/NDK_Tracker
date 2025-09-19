@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2196f3" />
+    <meta name="msapplication-navbutton-color" content="#2196f3" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="#2196f3" />
+    <meta name="description" content="Privacy-first family health tracker for neurodiverse children" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Autism Tracker">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob:;
+      media-src 'self' blob:;
+      connect-src 'self' http://localhost:* http://192.168.*:* http://10.*:* ws://localhost:* ws://192.168.*:* ws://10.*:*;
+      font-src 'self';
+      manifest-src 'self';
+    ">
+    
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <title>Autism Tracker</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+    <!-- Accessibility announcement region -->
+    <div id="accessibility-announcements" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+  </body>
+</html>
