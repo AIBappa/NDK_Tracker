@@ -121,6 +121,12 @@ class LLMProcessor:
     """Handles local LLM processing for conversation and data extraction"""
     
     def __init__(self, model_name: str = "llama2", llm_backend: str = "ollama"):
+        # Override backend from environment if set (used by minimal_setup.py)
+        env_backend = os.environ.get('DEFAULT_LLM_BACKEND')
+        if env_backend:
+            llm_backend = env_backend
+            print(f"Using LLM backend from environment: {llm_backend}")
+        
         self.model_name = model_name
         self.llm_backend = llm_backend  # "ollama" or "llamacpp"
         self.ollama_available = False
@@ -173,27 +179,33 @@ class LLMProcessor:
         try:
             from llama_cpp import Llama
             
-            # Map model names to file paths
-            model_paths = {
-                "llama2": "./models/llama-2-7b-chat.Q4_K_M.gguf",
-                "llama3": "./models/llama-3-8b-instruct.Q4_K_M.gguf", 
-                "mistral": "./models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-                "codellama": "./models/codellama-7b-instruct.Q4_K_M.gguf"
-            }
-            
-            model_path = model_paths.get(self.model_name)
-            if not model_path or not Path(model_path).exists():
-                # Try to find any .gguf model in models directory
-                models_dir = Path("./models")
-                if models_dir.exists():
-                    gguf_files = list(models_dir.glob("*.gguf"))
-                    if gguf_files:
-                        model_path = str(gguf_files[0])
-                        print(f"Using model: {model_path}")
+            # Check for environment variable first (set by minimal_setup.py)
+            env_model_path = os.environ.get('LLAMA_CPP_MODEL_PATH')
+            if env_model_path and Path(env_model_path).exists():
+                model_path = env_model_path
+                print(f"Using model from environment: {model_path}")
+            else:
+                # Fallback to predefined model paths
+                model_paths = {
+                    "llama2": "./models/llama-2-7b-chat.Q4_K_M.gguf",
+                    "llama3": "./models/llama-3-8b-instruct.Q4_K_M.gguf", 
+                    "mistral": "./models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+                    "codellama": "./models/codellama-7b-instruct.Q4_K_M.gguf"
+                }
+                
+                model_path = model_paths.get(self.model_name)
+                if not model_path or not Path(model_path).exists():
+                    # Try to find any .gguf model in models directory
+                    models_dir = Path("./models")
+                    if models_dir.exists():
+                        gguf_files = list(models_dir.glob("*.gguf"))
+                        if gguf_files:
+                            model_path = str(gguf_files[0])
+                            print(f"Using found model: {model_path}")
+                        else:
+                            raise FileNotFoundError("No .gguf models found in ./models/ directory")
                     else:
-                        raise FileNotFoundError("No .gguf models found in ./models/ directory")
-                else:
-                    raise FileNotFoundError("./models/ directory not found")
+                        raise FileNotFoundError("./models/ directory not found")
             
             # Initialize llama.cpp with optimized settings
             self.llm_instance = Llama(
