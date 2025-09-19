@@ -1,2 +1,8 @@
 # Ignore virtual environment
 backend/.venv/
+
+# Ignore build files
+backend/build/
+
+# Ignore binary file(s)
+backend/dist/autism_tracker_setup
