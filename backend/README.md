@@ -141,7 +141,8 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # Build Windows executable
-pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
+# Include backend 'main' module explicitly so PyInstaller bundles it
+pyinstaller --onefile --name autism_tracker_setup --hidden-import=main minimal_setup.py
 ```
 
 **For WSL users (Linux binary only):**
@@ -160,7 +161,17 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # Build Linux binary
-pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
+pyinstaller --onefile --name autism_tracker_setup --hidden-import=main minimal_setup.py
+
+### Troubleshooting builds
+
+- ModuleNotFoundError: No module named 'requests'
+   - Ensure `requests` is listed in `backend/requirements.txt` and reinstall deps
+   - Rebuild the exe. PyInstaller only bundles packages installed in the build env.
+
+- ModuleNotFoundError: No module named 'main'
+   - Build with `--hidden-import=main` as shown above so the backend module is included.
+   - Alternatively, verify `main.py` is in the same folder as `minimal_setup.py` at build time.
 ```
 
 ### What the Minimal Setup Does

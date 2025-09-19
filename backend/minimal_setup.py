@@ -62,8 +62,15 @@ def start_backend(models_dir: Path):
 
     try:
         # Import and run the backend
-        sys.path.insert(0, os.path.dirname(__file__))
-        from main import app
+        # In PyInstaller onefile, avoid manipulating sys.path; rely on bundled modules.
+        # Ensure 'main' is included at build time (use --hidden-import=main when building if needed).
+        try:
+            from main import app  # type: ignore
+        except ModuleNotFoundError:
+            # Fallback for frozen apps: try dynamic import
+            import importlib
+            app = importlib.import_module("main").app  # type: ignore[attr-defined]
+
         import uvicorn
 
         print("Backend started successfully!")
