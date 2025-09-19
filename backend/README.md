@@ -86,6 +86,71 @@ pyinstaller --onefile --name autism_tracker_backend main.py
 
 The executable will be in the `dist/` folder.
 
+## Minimal Setup (Recommended)
+
+For the easiest deployment, use the minimal setup that includes everything in one executable:
+
+### Build Minimal Setup Executable
+
+```bash
+# Install PyInstaller if not already installed
+pip install pyinstaller
+
+# Build the minimal setup executable
+pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
+```
+
+### What the Minimal Setup Does
+
+1. **Downloads a small LLM model** (~200MB TinyLlama model)
+2. **Starts the backend server** automatically
+3. **Provides one-click setup** for end users
+
+### Usage
+
+**For end users:**
+
+1. Download `autism_tracker_setup.exe`
+2. Double-click to run
+3. Wait for model download (~200MB)
+4. Backend starts automatically at `http://localhost:8000`
+
+**For developers:**
+
+```bash
+# Build the executable
+pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
+
+# Test the setup (skip download if model exists)
+./dist/autism_tracker_setup --skip-download
+```
+
+### Minimal Setup Features
+
+- **TinyLlama model**: 1.1B parameters (much smaller than 7B models)
+- **Automatic model download**: No manual setup required
+- **Self-contained**: Everything bundled in one executable
+- **Cross-platform**: Works on Windows, Mac, and Linux
+- **One-click deployment**: Perfect for non-technical users
+
+### Alternative: Separate Setup
+
+If you need more control over model selection:
+
+1. **Model Setup Executable:**
+
+   ```bash
+   pyinstaller --onefile --name model_setup setup_models.py
+   ```
+
+2. **Backend Executable:**
+
+   ```bash
+   pyinstaller --onefile autism_tracker_backend.spec
+   ```
+
+Then run: `model_setup.exe --download llama2-7b` followed by `autism_tracker_backend.exe`
+
 ## Security Notes
 
 - All traffic stays on local WiFi network
