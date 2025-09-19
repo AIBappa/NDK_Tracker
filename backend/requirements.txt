@@ -7,7 +7,8 @@ zeroconf==0.131.0
 pydantic>=2.8.0
 python-dateutil==2.8.2
 ollama==0.1.7
-llama-cpp-python==0.2.11
+# Use CPU-only build for better PyInstaller compatibility
+llama-cpp-python==0.2.11 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 psutil==5.9.6
 cryptography==46.0.0
 pyinstaller>=6.0.0
