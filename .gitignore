@@ -5,14 +5,11 @@ backend/.venv/
 backend/build/
 
 # Ignore binary file(s)
-backend/dist/NDK_tracker_setup
-backend/dist/NDK_tracker_setup.exe
 backend/dist/NDK_tracker_setup_ui.exe
 
 #Ignore downloaded model
 backend/dist/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 backend/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
-
 
 #Ignore logs
 *.log
