@@ -1,4 +1,4 @@
-# Autism Tracker
+# Neuro Diverse Kid Tracker
 
 A privacy-first family health tracker PWA for neurodiverse children with local data storage and voice-first interaction.
 
