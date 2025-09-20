@@ -1,6 +1,6 @@
 # LLM Integration Guide
 
-The Autism Tracker backend supports two LLM backends for processing natural language input:
+The NDK Tracker backend supports two LLM backends for processing natural language input:
 
 ## 1. Ollama Integration (Default)
 

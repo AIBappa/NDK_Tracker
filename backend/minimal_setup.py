@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Minimal setup script for Autism Tracker
+Minimal setup script for NDK Tracker
 Combines model download and backend startup in        logging.info(\"Backend imported successfully!\")
         
         # Test model initialization before starting server
@@ -76,7 +76,7 @@ def download_minimal_model(models_dir: Path):
 
 def setup_logging(models_dir: Path):
     """Setup logging to capture errors"""
-    log_file = models_dir / "autism_tracker.log"
+    log_file = models_dir / "NDK_tracker.log"
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -99,7 +99,7 @@ def check_ollama_available():
 
 def start_backend(models_dir: Path):
     """Start the backend server"""
-    print("Starting Autism Tracker backend...")
+    print("Starting NDK Tracker backend...")
     
     # Setup logging
     log_file = setup_logging(models_dir)
@@ -160,7 +160,7 @@ def start_backend(models_dir: Path):
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Minimal Autism Tracker Setup")
+    parser = argparse.ArgumentParser(description="Minimal NDK Tracker Setup")
     parser.add_argument("--models-dir", type=str, default="./models",
                        help="Directory to store models")
     parser.add_argument("--skip-download", action="store_true",
@@ -170,7 +170,7 @@ def main():
 
     models_dir = Path(args.models_dir).absolute()
 
-    print("=== Autism Tracker Minimal Setup ===")
+    print("=== NDK Tracker Minimal Setup ===")
     print(f"Models directory: {models_dir}")
 
     # Download model if needed

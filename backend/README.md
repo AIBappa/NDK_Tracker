@@ -1,6 +1,6 @@
-# Autism Tracker Backend
+# NDK Tracker Backend
 
-A FastAPI-based backend server for the Autism Tracker PWA that runs locally on your laptop.
+A FastAPI-based backend server for the NDK Tracker PWA that runs locally on your laptop.
 
 ## Features
 
@@ -97,7 +97,7 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # Build Windows executable
-pyinstaller --onefile --name autism_tracker_backend main.py
+pyinstaller --onefile --name NDK_tracker_backend main.py
 ```
 
 ### WSL/Linux Build
@@ -118,7 +118,7 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # Build Linux binary (NOT Windows compatible)
-pyinstaller --onefile --name autism_tracker_backend main.py
+pyinstaller --onefile --name NDK_tracker_backend main.py
 ```
 
 The executable will be in the `dist/` folder.
@@ -142,7 +142,7 @@ pip install pyinstaller
 
 # Build Windows executable
 # Include backend 'main' module explicitly so PyInstaller bundles it
-pyinstaller --onefile --name autism_tracker_setup --hidden-import=main minimal_setup.py
+pyinstaller --onefile --name NDK_tracker_setup --hidden-import=main minimal_setup.py
 ```
 
 **For WSL users (Linux binary only):**
@@ -161,7 +161,7 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # Build Linux binary
-pyinstaller --onefile --name autism_tracker_setup --hidden-import=main minimal_setup.py
+pyinstaller --onefile --name NDK_tracker_setup --hidden-import=main minimal_setup.py
 
 ### Troubleshooting builds
 
@@ -184,7 +184,7 @@ pyinstaller --onefile --name autism_tracker_setup --hidden-import=main minimal_s
 
 **For end users:**
 
-1. Download `autism_tracker_setup.exe`
+1. Download `NDK_tracker_setup.exe`
 2. Double-click to run
 3. Wait for model download (~200MB)
 4. Backend starts automatically at `http://localhost:8000`
@@ -193,10 +193,10 @@ pyinstaller --onefile --name autism_tracker_setup --hidden-import=main minimal_s
 
 ```bash
 # Build the executable
-pyinstaller --onefile --name autism_tracker_setup minimal_setup.py
+pyinstaller --onefile --name NDK_tracker_setup minimal_setup.py
 
 # Test the setup (skip download if model exists)
-./dist/autism_tracker_setup --skip-download
+./dist/NDK_tracker_setup --skip-download
 ```
 
 ### Minimal Setup Features
@@ -220,10 +220,10 @@ If you need more control over model selection:
 2. **Backend Executable:**
 
    ```bash
-   pyinstaller --onefile autism_tracker_backend.spec
+   pyinstaller --onefile NDK_tracker_backend.spec
    ```
 
-Then run: `model_setup.exe --download llama2-7b` followed by `autism_tracker_backend.exe`
+Then run: `model_setup.exe --download llama2-7b` followed by `NDK_tracker_backend.exe`
 
 ## Security Notes
 

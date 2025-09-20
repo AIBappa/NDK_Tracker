@@ -1,4 +1,4 @@
-const CACHE_NAME = 'autism-tracker-v1';
+const CACHE_NAME = 'NDK-tracker-v1';
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',

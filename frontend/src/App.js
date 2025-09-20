@@ -159,7 +159,7 @@ function App() {
   return (
     <div className={`App ${settings.theme}`}>
       <header className="App-header">
-        <h1>Autism Tracker</h1>
+        <h1>NDK Tracker</h1>
         {isConnected && (
           <div className="connection-status connected">
             <span className="status-dot"></span>

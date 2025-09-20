@@ -40,7 +40,7 @@ class SettingsConfig(BaseModel):
     accessibility: Dict[str, Any] = {}
 
 # Initialize FastAPI app
-app = FastAPI(title="Autism Tracker Backend", version="1.0.0")
+app = FastAPI(title="NDK Tracker Backend", version="1.0.0")
 
 # Initialize templates with PyInstaller-compatible path
 import sys
@@ -461,7 +461,7 @@ async def root_api():
     endpoint_url = f"http://{local_ip}:{port}"
     
     return {
-        "message": "Autism Tracker Backend",
+        "message": "NDK Tracker Backend",
         "status": "running",
         "pairing_info": {
             "endpoint": endpoint_url,
@@ -484,7 +484,7 @@ async def get_pairing_info():
         "local_ip": local_ip,
         "port": port,
         "instructions": [
-            "1. Open the Autism Tracker PWA on your mobile device",
+            "1. Open the NDK Tracker PWA on your mobile device",
             "2. Tap 'Scan QR to pair' on the PWA",
             "3. Point your device camera at the QR code above",
             "4. Your device will automatically connect to this backend"
@@ -763,14 +763,14 @@ async def health_check():
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='Autism Tracker Backend')
+    parser = argparse.ArgumentParser(description='NDK Tracker Backend')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--port', type=int, default=8080, help='Port to bind to')
     parser.add_argument('--reload', action='store_true', help='Enable auto-reload for development')
     
     args = parser.parse_args()
     
-    print(f"Starting Autism Tracker Backend on {args.host}:{args.port}")
+    print(f"Starting NDK Tracker Backend on {args.host}:{args.port}")
     print(f"Local IP: {get_local_ip()}")
     print(f"LLM Available: {llm_processor.ollama_available}")
     

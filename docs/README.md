@@ -1,10 +1,10 @@
-# Autism Tracker - Privacy-First Family Health Tracker
+# NDK Tracker - Privacy-First Family Health Tracker
 
 A comprehensive Progressive Web App (PWA) and local backend system for tracking daily activities of neurodiverse children with complete privacy and local data storage.
 
 ## Overview
 
-The Autism Tracker consists of two main components:
+The NDK Tracker consists of two main components:
 - **Backend**: A FastAPI server that runs locally on your laptop (.exe file)
 - **Frontend**: A React PWA that installs on mobile devices from the browser
 
@@ -81,11 +81,11 @@ Mobile Device (PWA)     Local Network     Laptop/Desktop (Backend)
 ## Project Structure
 
 ```
-Autism_Tracker/
+NDK_Tracker/
 ├── backend/
 │   ├── main.py              # FastAPI application
 │   ├── requirements.txt     # Python dependencies
-│   ├── autism_tracker_backend.spec  # PyInstaller spec
+│   ├── NDK_tracker_backend.spec  # PyInstaller spec
 │   └── README.md           # Backend documentation
 ├── frontend/
 │   ├── src/
