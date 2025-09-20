@@ -47,11 +47,20 @@ import sys
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller bundle
     template_dir = Path(sys._MEIPASS) / "templates"
+    frontend_dir = Path(sys._MEIPASS) / "frontend" / "build"
 else:
     # Running as script
     template_dir = "templates"
+    frontend_dir = Path("../frontend/build")
 
 templates = Jinja2Templates(directory=str(template_dir))
+
+# Mount PWA static files if they exist
+if frontend_dir.exists():
+    app.mount("/pwa", StaticFiles(directory=str(frontend_dir), html=True), name="pwa")
+    print(f"PWA mounted at /pwa from {frontend_dir}")
+else:
+    print(f"PWA files not found at {frontend_dir}")
 
 # CORS middleware to allow PWA access
 app.add_middleware(
@@ -471,23 +480,40 @@ async def root_api():
         }
     }
 
+@app.get("/pair", response_class=HTMLResponse)
+async def pairing_page(request: Request):
+    """Pairing page with PWA install link"""
+    local_ip = get_local_ip()
+    port = 8080
+    pwa_url = f"http://{local_ip}:{port}/pwa"
+    api_endpoint = f"http://{local_ip}:{port}"
+    
+    return templates.TemplateResponse("pairing.html", {
+        "request": request,
+        "pwa_url": pwa_url,
+        "api_endpoint": api_endpoint,
+        "local_ip": local_ip,
+        "port": port
+    })
+
 @app.get("/pairing/info")
 async def get_pairing_info():
     """Get pairing information for QR code display"""
     local_ip = get_local_ip()
     port = 8080
-    endpoint_url = f"http://{local_ip}:{port}"
+    pairing_url = f"http://{local_ip}:{port}/pair"
     
     return {
-        "endpoint": endpoint_url,
-        "qr_code": generate_qr_code(endpoint_url),
+        "endpoint": f"http://{local_ip}:{port}",
+        "pairing_url": pairing_url,
+        "qr_code": generate_qr_code(pairing_url),
         "local_ip": local_ip,
         "port": port,
         "instructions": [
-            "1. Open the NDK Tracker PWA on your mobile device",
-            "2. Tap 'Scan QR to pair' on the PWA",
-            "3. Point your device camera at the QR code above",
-            "4. Your device will automatically connect to this backend"
+            "1. Scan the QR code with your mobile device camera",
+            "2. This will open the pairing page in your browser",
+            "3. Tap 'Install PWA' to download the NDK Tracker app",
+            "4. Open the installed PWA and it will connect automatically"
         ]
     }
 

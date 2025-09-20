@@ -43,7 +43,7 @@ a = Analysis(
     ['minimal_setup.py'],
     pathex=[],
     binaries=llama_cpp_binaries,
-    datas=[('templates', 'templates')],
+    datas=[('templates', 'templates'), ('../frontend/build', 'frontend/build')],
     hiddenimports=[
         'main',
         'llama_cpp',

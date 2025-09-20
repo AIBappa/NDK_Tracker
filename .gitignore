@@ -3,6 +3,7 @@ backend/.venv/
 
 # Ignore build files
 backend/build/
+backend/_pycache__/
 
 # Ignore binary file(s)
 backend/dist/NDK_tracker_setup_ui.exe
@@ -13,3 +14,10 @@ backend/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 
 #Ignore logs
 *.log
+
+#Ignore frontend node_modules
+frontend/node_modules/
+
+#Ignore frontend build files
+frontend/build/
+backend/__pycache__/main.cpython-313.pyc
