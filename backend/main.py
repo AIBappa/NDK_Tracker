@@ -10,9 +10,9 @@ import base64
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from zeroconf import ServiceInfo, Zeroconf
 import threading
@@ -41,6 +41,17 @@ class SettingsConfig(BaseModel):
 
 # Initialize FastAPI app
 app = FastAPI(title="Autism Tracker Backend", version="1.0.0")
+
+# Initialize templates with PyInstaller-compatible path
+import sys
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller bundle
+    template_dir = Path(sys._MEIPASS) / "templates"
+else:
+    # Running as script
+    template_dir = "templates"
+
+templates = Jinja2Templates(directory=str(template_dir))
 
 # CORS middleware to allow PWA access
 app.add_middleware(
@@ -432,9 +443,19 @@ def generate_qr_code(data: str) -> str:
 
 # API Endpoints
 
-@app.get("/")
-async def root():
-    """Root endpoint with pairing information"""
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Root endpoint with web interface"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/status", response_class=HTMLResponse)
+async def status_page(request: Request):
+    """Status and API testing page"""
+    return templates.TemplateResponse("status.html", {"request": request})
+
+@app.get("/api")
+async def root_api():
+    """API version of root endpoint (for backward compatibility)"""
     local_ip = get_local_ip()
     port = 8080  # Default port
     endpoint_url = f"http://{local_ip}:{port}"

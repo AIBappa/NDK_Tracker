@@ -43,7 +43,7 @@ a = Analysis(
     ['minimal_setup.py'],
     pathex=[],
     binaries=llama_cpp_binaries,
-    datas=[],
+    datas=[('templates', 'templates')],
     hiddenimports=[
         'main',
         'llama_cpp',
@@ -53,7 +53,9 @@ a = Analysis(
         'ollama',
         'fastapi',
         'pydantic',
-        'requests'
+        'requests',
+        'jinja2',
+        'markupsafe'
     ],
     hookspath=[],
     hooksconfig={},
@@ -70,7 +72,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='autism_tracker_setup_v2',
+    name='autism_tracker_setup_ui',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

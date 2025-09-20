@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autism Tracker Backend</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin: 0;
+            font-size: 2.5em;
+        }
+        
+        .status {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .status.warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+        
+        .qr-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+        }
+        
+        .qr-code {
+            margin: 20px 0;
+            display: inline-block;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .qr-code img {
+            max-width: 300px;
+            height: auto;
+        }
+        
+        .endpoint-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .instructions {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .instructions ol {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        
+        .api-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .api-endpoints {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .endpoint {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .endpoint .method {
+            font-weight: bold;
+            color: #2196F3;
+            font-size: 12px;
+        }
+        
+        .endpoint .path {
+            font-family: monospace;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        
+        .endpoint .desc {
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .refresh-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px;
+        }
+        
+        .refresh-btn:hover {
+            background: #45a049;
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧩 Autism Tracker Backend</h1>
+            <p>Local server for privacy-first tracking</p>
+        </div>
+        
+        <div id="status" class="status">
+            <strong>✅ Server Status:</strong> Running and ready for connections
+        </div>
+        
+        <div class="qr-section">
+            <h2>📱 Connect Your Mobile Device</h2>
+            <p>Scan this QR code with the Autism Tracker PWA to connect:</p>
+            
+            <div class="qr-code" id="qr-container">
+                <div>Loading QR code...</div>
+            </div>
+            
+            <div class="endpoint-info" id="endpoint-info">
+                <div><strong>Endpoint:</strong> <span id="endpoint-url">Loading...</span></div>
+                <div><strong>Local IP:</strong> <span id="local-ip">Loading...</span></div>
+            </div>
+            
+            <button class="refresh-btn" onclick="loadPairingInfo()">🔄 Refresh QR Code</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 How to Connect</h3>
+            <ol>
+                <li>Open the Autism Tracker PWA on your mobile device</li>
+                <li>Tap "Scan QR to pair" on the PWA</li>
+                <li>Point your device camera at the QR code above</li>
+                <li>Your device will automatically connect to this backend</li>
+                <li>Start logging activities and data!</li>
+            </ol>
+        </div>
+        
+        <div id="llm-status" class="status warning">
+            <strong>🤖 AI Status:</strong> <span id="llm-info">Loading...</span>
+        </div>
+        
+        <div class="api-info">
+            <h3>🔌 API Endpoints</h3>
+            <div class="api-endpoints">
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="path">/</div>
+                    <div class="desc">Main pairing page (this page)</div>
+                </div>
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="path">/pairing/info</div>
+                    <div class="desc">Get pairing information as JSON</div>
+                </div>
+                <div class="endpoint">
+                    <div class="method">POST</div>
+                    <div class="path">/input/log</div>
+                    <div class="desc">Submit new log entry</div>
+                </div>
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="path">/data/summary</div>
+                    <div class="desc">Get daily data summary</div>
+                </div>
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="path">/timeline/view</div>
+                    <div class="desc">Get timeline visualization</div>
+                </div>
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="path">/health</div>
+                    <div class="desc">Server health check</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadPairingInfo() {
+            try {
+                // Load pairing information
+                const response = await fetch('/pairing/info');
+                const data = await response.json();
+                
+                // Update QR code
+                const qrContainer = document.getElementById('qr-container');
+                qrContainer.innerHTML = `<img src="${data.qr_code}" alt="QR Code for pairing" />`;
+                
+                // Update endpoint info
+                document.getElementById('endpoint-url').textContent = data.endpoint;
+                document.getElementById('local-ip').textContent = data.local_ip;
+                
+            } catch (error) {
+                console.error('Failed to load pairing info:', error);
+                document.getElementById('qr-container').innerHTML = '<div style="color: red;">Failed to load QR code</div>';
+            }
+        }
+        
+        async function loadLLMStatus() {
+            try {
+                const response = await fetch('/llm/status');
+                const status = await response.json();
+                
+                const llmInfo = document.getElementById('llm-info');
+                const llmStatusDiv = document.getElementById('llm-status');
+                
+                if (status.ollama_available || status.llamacpp_available) {
+                    llmInfo.textContent = `Using ${status.current_backend} backend with ${status.current_model} model`;
+                    llmStatusDiv.className = 'status';
+                } else {
+                    llmInfo.textContent = 'No AI backend available - using keyword fallback';
+                    llmStatusDiv.className = 'status warning';
+                }
+                
+            } catch (error) {
+                console.error('Failed to load LLM status:', error);
+                document.getElementById('llm-info').textContent = 'Failed to load AI status';
+            }
+        }
+        
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPairingInfo();
+            loadLLMStatus();
+            
+            // Refresh data every 30 seconds
+            setInterval(() => {
+                loadPairingInfo();
+                loadLLMStatus();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
