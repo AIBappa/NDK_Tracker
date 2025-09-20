@@ -5,6 +5,7 @@ A privacy-first family health tracker PWA for neurodiverse children with local d
 ## Quick Start
 
 ### Backend (Laptop)
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -12,6 +13,7 @@ python main.py
 ```
 
 ### Frontend (Mobile PWA)
+
 ```bash
 cd frontend
 npm install
@@ -59,4 +61,4 @@ Then pair devices using the QR code displayed by the backend.
 
 ## License
 
-[Add license information]
+Licensed under the Apache License 2.0
