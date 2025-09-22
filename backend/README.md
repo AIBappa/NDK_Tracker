@@ -1,233 +1,141 @@
 # NDK Tracker Backend
 
-A FastAPI-based backend server for the NDK Tracker PWA that runs locally on your laptop.
+FastAPI backend for the NDK Tracker PWA. Runs locally on your laptop, serves both HTTP and HTTPS, and provides a smooth pairing flow for mobile devices on the same Wi‑Fi network.
 
-## Features
+## Highlights
 
 - Local data storage (no cloud required)
 - Voice and text input processing via LLM
-- QR code pairing with mobile PWA
-- Timeline data visualization
-- Conversational slot-filling interface
-- Settings and schedule management
+- Dual HTTP/HTTPS serving with self‑signed certificate
+- QR pairing and Windows clipboard copy of the pairing URL
+- Serves the PWA bundle at `/pwa` when present
+- Timeline data endpoints and conversational interface
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10+ (recommended)
 - Ollama (optional, for local LLM processing)
 
-## Installation
+Install Python dependencies:
 
-1. Install Python dependencies:
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
-2. (Optional) Install Ollama for LLM processing:
-   - Download from https://ollama.ai
-   - Install llama2 model: `ollama pull llama2`
+## How it runs (minimal_setup)
 
-## Running the Server
+The recommended entrypoint is `minimal_setup.py`. It:
 
-### Development Mode
-```bash
+- Locates or downloads a small GGUF model (TinyLlama) unless `--skip-download` is used
+- Sets up environment variables for llama-cpp when using a local GGUF
+- Generates a self‑signed certificate (with localhost + LAN IP SAN)
+- Starts HTTP on port 8000 and HTTPS on port 8443
+- Prints the LAN IP URLs and a QR code for pairing; copies the pairing URL to the clipboard on Windows
+
+Run locally with HTTPS and pairing support:
+
+```powershell
+# From backend/ directory
+python minimal_setup.py --skip-download
+```
+
+What you’ll see on start:
+
+- HTTP: <http://LAN-IP:8000>
+- HTTPS: <https://LAN-IP:8443>
+- Pairing page: <https://LAN-IP:8443/pair>
+- An ASCII QR code for the pairing link
+- On Windows, the pairing URL is copied to your clipboard automatically
+
+Press Ctrl+C to stop. Logs are written to `models/NDK_tracker.log` next to where the model lives.
+
+## Development mode (basic)
+
+You can also run the app in a minimal HTTP-only mode:
+
+```powershell
 python main.py --reload
 ```
 
-### Production Mode
-```bash
-python main.py --host 0.0.0.0 --port 8080
-```
+Note: Voice input on mobile usually requires HTTPS; prefer `minimal_setup.py` when testing microphone features across devices.
 
-### Command Line Options
-- `--host`: Host to bind to (default: 0.0.0.0)
-- `--port`: Port to bind to (default: 8080)
-- `--reload`: Enable auto-reload for development
+## Packaging and distribution
 
-## API Endpoints
-
-### Pairing
-- `GET /` - Root endpoint with pairing info
-- `GET /pairing/info` - QR code and pairing instructions
-
-### Data Input
-- `POST /input/log` - Submit new log entry
-- `POST /input/clarify` - Answer clarification questions
-- `POST /input/save_session` - Save completed session
-
-### Data Retrieval
-- `GET /data/summary` - Get daily/range summary
-- `GET /timeline/view` - Get timeline visualization data
-
-### Configuration  
-- `GET /settings` - Get current settings
-- `POST /settings` - Update settings
-- `GET /setup/schedule` - Get schedule config
-- `POST /setup/schedule` - Update schedule
-
-### Health
-- `GET /health` - Health check and status
-
-## Data Storage
-
-All data is stored locally in the `./data/` directory:
-- `./data/sessions/YYYY-MM-DD.json` - Daily session files
-- `./data/settings.json` - App settings
-- `./data/schedule.json` - Reminder schedule
-
-## Building Executable
-
-### Platform Requirements
-
-**⚠️ Important**: PyInstaller builds executables for the platform where it runs:
-- **Windows → Windows .exe** (for Windows 11 users)
-- **WSL/Linux → Linux binary** (won't run on Windows)
-
-### Windows Build (Recommended for Windows 11)
-
-Build on Windows PowerShell/CMD for Windows 11 compatibility:
+Use the repo‑root PowerShell script (recommended):
 
 ```powershell
-# Create virtual environment (recommended)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# Install dependencies and build tools
-pip install -r requirements.txt
-pip install pyinstaller
-
-# Build Windows executable
-pyinstaller --onefile --name NDK_tracker_backend main.py
+# From repo root (not backend/)
+./build_package.ps1
 ```
 
-### WSL/Linux Build
+This script will:
 
-For WSL users (creates Linux binary only):
+- Build the React PWA and mirror it into `backend/frontend/build` (served at `/pwa`)
+- Ensure `backend/.venv` exists and install Python deps
+- Package the backend using `backend/NDK_tracker_setup.spec`
+- Place the final executable(s) into `dist/` at the repo root
+- Copy standalone PWA assets to `dist/pwa/`
+- Preserve `dist/models` and `dist/data` between builds; sync `.gguf` models non‑destructively
 
-```bash
-# Install system dependencies first
-sudo apt update
-sudo apt install -y python3-full python3-venv build-essential cmake libomp-dev
+End users only need the `.exe` in `dist/`. Double‑click to start; pairing info and QR will be shown.
 
-# Create virtual environment (required for PEP 668)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-pip install pyinstaller
-
-# Build Linux binary (NOT Windows compatible)
-pyinstaller --onefile --name NDK_tracker_backend main.py
-```
-
-The executable will be in the `dist/` folder.
-
-## Minimal Setup (Recommended)
-
-For the easiest deployment, use the minimal setup that includes everything in one executable:
-
-### Build Minimal Setup Executable
-
-**For Windows 11 executable (build on Windows):**
+Advanced: If you need a direct PyInstaller call without the script, use the spec file the script relies on:
 
 ```powershell
-# Create virtual environment
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-pip install pyinstaller
-
-# Build Windows executable
-# Include backend 'main' module explicitly so PyInstaller bundles it
-pyinstaller --onefile --name NDK_tracker_setup --hidden-import=main minimal_setup.py
+# From backend/
+python -m PyInstaller --noconfirm --distpath ..\dist --workpath .\build NDK_tracker_setup.spec
 ```
 
-**For WSL users (Linux binary only):**
+## API endpoints (core)
 
-```bash
-# Install system dependencies
-sudo apt update
-sudo apt install -y python3-full python3-venv build-essential cmake libomp-dev
+Pairing and PWA:
 
-# Create virtual environment (required for PEP 668)
-python3 -m venv .venv
-source .venv/bin/activate
+- `GET /` — Root, may show pairing/help
+- `GET /pair` — Pairing page (used by QR)
+- `GET /pwa` — Serves the PWA build if present at `backend/frontend/build`
 
-# Install dependencies
-pip install -r requirements.txt
-pip install pyinstaller
+Data input:
 
-# Build Linux binary
-pyinstaller --onefile --name NDK_tracker_setup --hidden-import=main minimal_setup.py
+- `POST /input/log` — Submit a new log entry
+- `POST /input/clarify` — Answer clarification questions
+- `POST /input/save_session` — Save a completed session
 
-### Troubleshooting builds
+Data retrieval:
 
-- ModuleNotFoundError: No module named 'requests'
-   - Ensure `requests` is listed in `backend/requirements.txt` and reinstall deps
-   - Rebuild the exe. PyInstaller only bundles packages installed in the build env.
+- `GET /data/summary` — Get daily/range summary
+- `GET /timeline/view` — Timeline data for visualization
 
-- ModuleNotFoundError: No module named 'main'
-   - Build with `--hidden-import=main` as shown above so the backend module is included.
-   - Alternatively, verify `main.py` is in the same folder as `minimal_setup.py` at build time.
-```
+Configuration:
 
-### What the Minimal Setup Does
+- `GET /settings` — Get current settings
+- `POST /settings` — Update settings
+- `GET /setup/schedule` — Get schedule config
+- `POST /setup/schedule` — Update schedule
 
-1. **Downloads a small LLM model** (~200MB TinyLlama model)
-2. **Starts the backend server** automatically
-3. **Provides one-click setup** for end users
+Health:
 
-### Usage
+- `GET /health` — Health check and status
 
-**For end users:**
+## Data and models
 
-1. Download `NDK_tracker_setup.exe`
-2. Double-click to run
-3. Wait for model download (~200MB)
-4. Backend starts automatically at `http://localhost:8000`
+- Data defaults to `./data/` (alongside the backend)
+  - `./data/sessions/YYYY-MM-DD.json` — Daily session files
+  - `./data/settings.json` — App settings
+  - `./data/schedule.json` — Reminder schedule
 
-**For developers:**
+- Models live next to the executable when packaged: `dist/models/`
+  - `minimal_setup.py` prefers a GGUF model in `dist/models` and sets `LLAMA_CPP_MODEL_PATH`
+  - If none found and not `--skip-download`, it downloads a small TinyLlama `.gguf`
 
-```bash
-# Build the executable
-pyinstaller --onefile --name NDK_tracker_setup minimal_setup.py
+## Security and certificates
 
-# Test the setup (skip download if model exists)
-./dist/NDK_tracker_setup --skip-download
-```
+- HTTPS is enabled automatically on port 8443 with a self‑signed certificate
+- The cert/key are stored under `models/certs/`
+- On first mobile use, accept the certificate warning to proceed
+- Always use the HTTPS link on mobile to enable voice input
 
-### Minimal Setup Features
+## Notes
 
-- **TinyLlama model**: 1.1B parameters (much smaller than 7B models)
-- **Automatic model download**: No manual setup required
-- **Self-contained**: Everything bundled in one executable
-- **Cross-platform**: Works on Windows, Mac, and Linux
-- **One-click deployment**: Perfect for non-technical users
-
-### Alternative: Separate Setup
-
-If you need more control over model selection:
-
-1. **Model Setup Executable:**
-
-   ```bash
-   pyinstaller --onefile --name model_setup setup_models.py
-   ```
-
-2. **Backend Executable:**
-
-   ```bash
-   pyinstaller --onefile NDK_tracker_backend.spec
-   ```
-
-Then run: `model_setup.exe --download llama2-7b` followed by `NDK_tracker_backend.exe`
-
-## Security Notes
-
-- All traffic stays on local WiFi network
-- No cloud storage or external data transmission
-- Self-signed HTTPS support can be added for additional security
-- QR code pairing provides secure device connection
+- Windows clipboard integration copies the pairing URL automatically at startup
+- LAN IP detection prefers private ranges (192.168.x, 10.x, 172.16–31.x)
+- The backend runs HTTP and HTTPS in parallel so older clients can still connect over HTTP if needed
