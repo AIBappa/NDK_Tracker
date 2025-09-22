@@ -29,6 +29,7 @@ import sys
 import subprocess
 import argparse
 from pathlib import Path
+from typing import Optional
 import requests
 import time
 import logging
@@ -39,6 +40,56 @@ MINIMAL_MODEL = {
     "url": "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
     "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 }
+
+def find_existing_model(models_dir: Path) -> Optional[Path]:
+    """Search for an existing GGUF model in common locations.
+    Preference: exact MINIMAL_MODEL filename in candidate dirs, else any .gguf.
+    """
+    candidates: list[Path] = []
+    try:
+        # Primary requested directory
+        candidates.append(models_dir)
+        # Executable directory (PyInstaller onefile) / models
+        if getattr(sys, 'frozen', False):
+            exe_dir = Path(sys.executable).parent
+            candidates.append(exe_dir / 'models')
+        # Current working dir / models
+        candidates.append(Path.cwd() / 'models')
+        # Script directory / models
+        candidates.append(Path(__file__).resolve().parent / 'models')
+        # Current working dir (flat)
+        candidates.append(Path.cwd())
+    except Exception:
+        pass
+
+    logging.info("Model search paths (in order):")
+    for p in candidates:
+        logging.info(f" - {p}")
+
+    # First, try exact filename in any candidate dir
+    for base in candidates:
+        try:
+            if base and base.exists():
+                target = base / MINIMAL_MODEL["filename"]
+                if target.exists():
+                    logging.info(f"Found existing model: {target}")
+                    return target
+        except Exception:
+            continue
+
+    # Fallback: any .gguf in candidates (first one)
+    for base in candidates:
+        try:
+            if base and base.exists():
+                matches = list(base.glob('*.gguf'))
+                if matches:
+                    logging.info(f"Found alternative model: {matches[0]}")
+                    return matches[0]
+        except Exception:
+            continue
+
+    logging.info("No existing model found in candidate paths.")
+    return None
 
 def download_minimal_model(models_dir: Path):
     """Download minimal model for testing"""
@@ -105,12 +156,27 @@ def start_backend(models_dir: Path):
     log_file = setup_logging(models_dir)
     logging.info(f"Log file: {log_file}")
 
-    # Set environment variable for model path
+    # Determine model path to use
     env = os.environ.copy()
-    env['LLAMA_CPP_MODEL_PATH'] = str(models_dir / MINIMAL_MODEL["filename"])
+    pre_set = env.get('LLAMA_CPP_MODEL_PATH')
+    if pre_set and Path(pre_set).exists():
+        model_path = Path(pre_set)
+        logging.info(f"Using pre-set LLAMA_CPP_MODEL_PATH: {model_path}")
+    else:
+        existing = find_existing_model(models_dir)
+        if existing and existing.exists():
+            model_path = existing
+        else:
+            model_path = models_dir / MINIMAL_MODEL["filename"]
+        env['LLAMA_CPP_MODEL_PATH'] = str(model_path)
+    logging.info(f"Final model path: {env.get('LLAMA_CPP_MODEL_PATH')}")
     
     # Force llama-cpp backend since we're using a GGUF model
     env['DEFAULT_LLM_BACKEND'] = 'llamacpp'
+    # Update current process environment so backend can read these
+    os.environ['DEFAULT_LLM_BACKEND'] = env['DEFAULT_LLM_BACKEND']
+    if 'LLAMA_CPP_MODEL_PATH' in env:
+        os.environ['LLAMA_CPP_MODEL_PATH'] = env['LLAMA_CPP_MODEL_PATH']
     
     # Check Ollama availability
     ollama_available = check_ollama_available()
@@ -173,11 +239,18 @@ def main():
     print("=== NDK Tracker Minimal Setup ===")
     print(f"Models directory: {models_dir}")
 
-    # Download model if needed
-    if not args.skip_download:
-        if not download_minimal_model(models_dir):
-            print("Failed to download model")
-            return 1
+    # If a model already exists in common paths, skip download.
+    existing_model = find_existing_model(models_dir)
+    if existing_model:
+        print(f"Using existing model at: {existing_model}")
+    else:
+        # Download model if needed (unless explicitly skipped)
+        if not args.skip_download:
+            if not download_minimal_model(models_dir):
+                print("Failed to download model")
+                return 1
+        else:
+            print("--skip-download provided and no model found; backend may fail to start without a model.")
 
     # Start backend
     start_backend(models_dir)
