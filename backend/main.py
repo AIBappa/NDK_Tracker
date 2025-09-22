@@ -460,10 +460,19 @@ def generate_qr_code(data: str) -> str:
 
 # API Endpoints
 
-@app.get("/")
-async def root():
-    """Redirect root to pairing page for clearer onboarding"""
-    return RedirectResponse(url="/pair", status_code=307)
+def _build_base_url(request: Request) -> str:
+    """Build base URL (scheme://host:port) from the incoming request to avoid hardcoded ports"""
+    # request.url.scheme can be http/https
+    scheme = request.url.scheme
+    # Use host header (may include port) or fallback to url components
+    host = request.headers.get("host") or request.client.host
+    return f"{scheme}://{host}"
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the main pairing page with QR code at root"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/status", response_class=HTMLResponse)
 async def status_page(request: Request):
@@ -471,20 +480,19 @@ async def status_page(request: Request):
     return templates.TemplateResponse("status.html", {"request": request})
 
 @app.get("/api")
-async def root_api():
+async def root_api(request: Request):
     """API version of root endpoint (for backward compatibility)"""
     local_ip = get_local_ip()
-    port = 8080  # Default port
-    endpoint_url = f"http://{local_ip}:{port}"
+    base_url = _build_base_url(request)
     
     return {
         "message": "NDK Tracker Backend",
         "status": "running",
         "pairing_info": {
-            "endpoint": endpoint_url,
-            "qr_code": generate_qr_code(endpoint_url),
+            "endpoint": base_url,
+            "qr_code": generate_qr_code(base_url),
             "local_ip": local_ip,
-            "port": port
+            "port": request.url.port
         }
     }
 
@@ -492,31 +500,31 @@ async def root_api():
 async def pairing_page(request: Request):
     """Pairing page with PWA install link"""
     local_ip = get_local_ip()
-    port = 8080
-    pwa_url = f"http://{local_ip}:{port}/pwa"
-    api_endpoint = f"http://{local_ip}:{port}"
+    base_url = _build_base_url(request)
+    pwa_url = f"{base_url}/pwa"
+    api_endpoint = base_url
     
     return templates.TemplateResponse("pairing.html", {
         "request": request,
         "pwa_url": pwa_url,
         "api_endpoint": api_endpoint,
         "local_ip": local_ip,
-        "port": port
+        "port": request.url.port
     })
 
 @app.get("/pairing/info")
-async def get_pairing_info():
+async def get_pairing_info(request: Request):
     """Get pairing information for QR code display"""
     local_ip = get_local_ip()
-    port = 8080
-    pairing_url = f"http://{local_ip}:{port}/pair"
+    base_url = _build_base_url(request)
+    pairing_url = f"{base_url}/pair"
     
     return {
-        "endpoint": f"http://{local_ip}:{port}",
+        "endpoint": base_url,
         "pairing_url": pairing_url,
         "qr_code": generate_qr_code(pairing_url),
         "local_ip": local_ip,
-        "port": port,
+        "port": request.url.port,
         "instructions": [
             "1. Scan the QR code with your mobile device camera",
             "2. This will open the pairing page in your browser",

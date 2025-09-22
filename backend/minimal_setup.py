@@ -43,20 +43,23 @@ MINIMAL_MODEL = {
 
 def find_existing_model(models_dir: Path) -> Optional[Path]:
     """Search for an existing GGUF model in common locations.
-    Preference: exact MINIMAL_MODEL filename in candidate dirs, else any .gguf.
+    Preference: models next to the executable (for packaged app), then provided models_dir,
+    then CWD/models, then any .gguf in CWD. Avoid backend script directory when frozen to
+    prevent scattering models in source folders.
     """
     candidates: list[Path] = []
     try:
-        # Primary requested directory
-        candidates.append(models_dir)
-        # Executable directory (PyInstaller onefile) / models
+        # Executable directory (PyInstaller onefile) / models has highest priority when frozen
         if getattr(sys, 'frozen', False):
             exe_dir = Path(sys.executable).parent
             candidates.append(exe_dir / 'models')
+        # Primary requested directory (defaults to ./models relative to CWD)
+        candidates.append(models_dir)
         # Current working dir / models
         candidates.append(Path.cwd() / 'models')
-        # Script directory / models
-        candidates.append(Path(__file__).resolve().parent / 'models')
+        # Only include script directory when not frozen (development runs)
+        if not getattr(sys, 'frozen', False):
+            candidates.append(Path(__file__).resolve().parent / 'models')
         # Current working dir (flat)
         candidates.append(Path.cwd())
     except Exception:

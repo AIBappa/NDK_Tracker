@@ -73,17 +73,26 @@ Pop-Location
 Write-Host "[5/6] Building Windows .exe with PyInstaller" -ForegroundColor Cyan
 Push-Location $backendDir
 # Use python -m to invoke PyInstaller to avoid launcher issues
-& $venvPython -m PyInstaller --noconfirm --log-level DEBUG NDK_tracker_setup.spec
+${distDirFinal} = Join-Path $repoRoot 'dist'
+# Place final EXE directly into root dist to avoid backend/dist duplication
+& $venvPython -m PyInstaller --noconfirm --log-level DEBUG --distpath "$distDirFinal" --workpath (Join-Path $backendDir 'build') NDK_tracker_setup.spec
 Pop-Location
 
 Write-Host "[6/6] Creating distribution folder with exe and PWA" -ForegroundColor Cyan
 $distDir = Join-Path $repoRoot 'dist'
 if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir | Out-Null }
-# Copy exe(s)
-robocopy (Join-Path $backendDir 'dist') $distDir *.exe /S | Out-Null
 # Copy PWA for standalone hosting option
 robocopy (Join-Path $frontendDir 'build') (Join-Path $distDir 'pwa') /MIR | Out-Null
+
+# Copy models into root dist/models so the exe can find them next to itself
+$rootModels = Join-Path $distDir 'models'
+if (Test-Path (Join-Path $backendDir 'models')) {
+  if (-not (Test-Path $rootModels)) { New-Item -ItemType Directory -Path $rootModels | Out-Null }
+  Write-Host "Copying backend/models to dist/models" -ForegroundColor DarkCyan
+  robocopy (Join-Path $backendDir 'models') $rootModels *.gguf /S | Out-Null
+}
 
 Write-Host "✅ Build complete!" -ForegroundColor Green
 Write-Host "- EXE(s): $distDir" -ForegroundColor Green
 Write-Host "- PWA:    $distDir\pwa" -ForegroundColor Green
+Write-Host "- Models: $distDir\models (if present)" -ForegroundColor Green
