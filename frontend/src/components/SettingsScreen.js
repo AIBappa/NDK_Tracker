@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, speechService }) => {
   const [localSettings, setLocalSettings] = useState(settings);
-  const [schedule, setSchedule] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // Removed unused schedule/isLoading state
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('general');
@@ -53,6 +52,7 @@ const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, 
       input_mode: 'voice',
       llm_model: 'llama2',
       theme: 'light',
+      speech: { silence_timeout_ms: 5000 },
       accessibility: {
         high_contrast: false,
         large_text: false,
@@ -236,6 +236,28 @@ const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, 
         )}
       </div>
 
+      {/* Silence timeout */}
+      <div className="setting-item">
+        <label htmlFor="silence-timeout">Silence Timeout:</label>
+        <select
+          id="silence-timeout"
+          className="setting-input"
+          value={(localSettings.speech && localSettings.speech.silence_timeout_ms) || 5000}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            setLocalSettings(prev => ({
+              ...prev,
+              speech: { ...(prev.speech || {}), silence_timeout_ms: val }
+            }));
+          }}
+        >
+          <option value={3000}>3 seconds</option>
+          <option value={5000}>5 seconds</option>
+          <option value={8000}>8 seconds</option>
+        </select>
+        <p className="setting-description">How long the app should wait in silence before auto-stopping voice input.</p>
+      </div>
+
       {speechService.getVoices().length > 0 && (
         <div className="setting-item">
           <label htmlFor="voice-selection">Voice:</label>
@@ -322,14 +344,16 @@ const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, 
     <div className="settings-screen">
       {/* Header */}
       <div className="settings-header">
-        <div className="header-actions">
+        <div className="header-left">
           <button 
             className="btn btn-secondary"
             onClick={() => onNavigate('conversation')}
           >
             ← Back
           </button>
-          <h2>Settings</h2>
+          <h2 style={{ marginLeft: '0.5rem' }}>Settings</h2>
+        </div>
+        <div className="header-actions">
           <button 
             className="btn btn-primary"
             onClick={saveSettings}

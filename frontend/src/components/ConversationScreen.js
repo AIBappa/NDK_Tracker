@@ -10,12 +10,25 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
   const [showTextInput, setShowTextInput] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const textAreaRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const micStreamRef = useRef(null);
+  const rafRef = useRef(null);
+  const [micLevel, setMicLevel] = useState(0);
 
   // Initialize conversation once
   useEffect(() => {
     startNewSession();
+    // Show onboarding only first time
+    try {
+      const seen = localStorage.getItem('ndk_onboarding_seen');
+      if (!seen) {
+        setShowOnboarding(true);
+      }
+    } catch (_) {}
   }, []);
 
   // Auto-focus text input when input mode switches to text
@@ -71,7 +84,36 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
     try {
       setIsListening(true);
       setTranscript('');
+      // Initialize mic level visualization
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioContextRef.current = audioCtx;
+        analyserRef.current = analyser;
+        micStreamRef.current = stream;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          analyser.getByteTimeDomainData(dataArray);
+          // Compute simple RMS
+          let sumSquares = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const v = (dataArray[i] - 128) / 128;
+            sumSquares += v * v;
+          }
+          const rms = Math.sqrt(sumSquares / dataArray.length);
+          setMicLevel(rms);
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      } catch (e) {
+        // ignore mic level if not available
+      }
       
+      const silenceMs = (settings && settings.speech && settings.speech.silence_timeout_ms) ? settings.speech.silence_timeout_ms : 5000;
       speechService.startListening(
         (result) => {
           // Show interim if available, else the aggregated final
@@ -91,8 +133,14 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
         },
         () => {
           setIsListening(false);
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
+          if (audioContextRef.current) audioContextRef.current.close();
+          if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
+          rafRef.current = null;
+          audioContextRef.current = null;
+          micStreamRef.current = null;
         },
-        { silenceMs: 5000, stopOnSilence: true, stopOnFinal: false }
+        { silenceMs, stopOnSilence: true, stopOnFinal: false }
       );
     } catch (error) {
       setIsListening(false);
@@ -271,6 +319,28 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
 
   return (
     <div className="conversation-screen">
+      {showOnboarding && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+          <div className="modal">
+            <h3 id="onboarding-title">Welcome to NDK Tracker</h3>
+            <p>
+              Speak naturally to log your child’s day: food, medication, behavior, exercise, water, potty, school and more.
+              Tap Answer to start, then pause or press Stop when done. You can review and adjust entries later in the Timeline.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  try { localStorage.setItem('ndk_onboarding_seen', '1'); } catch (_) {}
+                  setShowOnboarding(false);
+                }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Current Prompt Section */}
       <div className="prompt-section">
         <div className="card">
@@ -303,6 +373,13 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
                   const finalText = (transcript || '').trim();
                   speechService.stopListening();
                   setIsListening(false);
+                  // cleanup mic level
+                  if (rafRef.current) cancelAnimationFrame(rafRef.current);
+                  if (audioContextRef.current) audioContextRef.current.close();
+                  if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
+                  rafRef.current = null;
+                  audioContextRef.current = null;
+                  micStreamRef.current = null;
                   if (finalText) {
                     submitInput(finalText, true);
                   }
@@ -419,9 +496,9 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
       {isListening && (
         <div className="voice-indicator">
           <div className="voice-animation">
-            <div className="voice-wave"></div>
-            <div className="voice-wave"></div>
-            <div className="voice-wave"></div>
+            <div className="voice-wave" style={{ transform: `scaleY(${1 + micLevel * 4})` }}></div>
+            <div className="voice-wave" style={{ transform: `scaleY(${1 + micLevel * 6})` }}></div>
+            <div className="voice-wave" style={{ transform: `scaleY(${1 + micLevel * 4})` }}></div>
           </div>
           <p>Listening... Speak now (auto-stops after 5s of silence or tap Stop)</p>
         </div>

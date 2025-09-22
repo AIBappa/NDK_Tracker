@@ -14,6 +14,7 @@ function App() {
   const [settings, setSettings] = useState({
     input_mode: 'voice',
     theme: 'light',
+    speech: { silence_timeout_ms: 5000 },
     accessibility: {
       high_contrast: false,
       large_text: false,
