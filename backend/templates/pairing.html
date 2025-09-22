@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NDK Tracker - Device Pairing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+            font-size: 2.2em;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+        
+        .success-icon {
+            font-size: 4em;
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+        
+        .pwa-section {
+            background: #e8f5e8;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 25px 0;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .install-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 15px 0;
+            transition: background-color 0.3s;
+        }
+        
+        .install-btn:hover {
+            background: #45a049;
+        }
+        
+        .instructions {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #333;
+            text-align: center;
+        }
+        
+        .instructions ol {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        
+        .endpoint-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .manual-entry {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #ff9800;
+        }
+        
+        .manual-entry input {
+            width: 100%;
+            max-width: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        
+        .copy-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: #1976D2;
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">✅</div>
+            <h1>🧩 NDK Tracker</h1>
+            <p>Device pairing successful!</p>
+        </div>
+        
+        <div class="pwa-section">
+            <h2>📱 Install the App</h2>
+            <p>Get the NDK Tracker Progressive Web App for the best experience (you may need to accept the self-signed certificate):</p>
+            
+            <a href="{{ pwa_url }}" class="install-btn">
+                📥 Install NDK Tracker PWA
+            </a>
+            
+            <p style="font-size: 14px; color: #666; margin-top: 15px;">
+                After clicking, look for "Add to Home Screen" or "Install" option in your browser menu
+            </p>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Next Steps</h3>
+            <ol>
+                <li>Tap the "Install NDK Tracker PWA" button above</li>
+                <li>Your browser will show an "Add to Home Screen" or "Install" option</li>
+                <li>Confirm the installation to add the app to your home screen</li>
+                <li>Open the installed NDK Tracker app</li>
+                <li>The app will automatically connect to this backend</li>
+                <li>Start logging daily activities!</li>
+            </ol>
+        </div>
+        
+        <div class="endpoint-info">
+            <div><strong>Backend Server (LAN):</strong> {{ api_endpoint }} 
+                <button class="copy-btn" onclick="copyToClipboard('{{ api_endpoint }}')">Copy</button>
+            </div>
+            <div><strong>PWA URL:</strong> {{ pwa_url }}
+                <button class="copy-btn" onclick="copyToClipboard('{{ pwa_url }}')">Copy</button>
+            </div>
+            <div><strong>Local IP:</strong> {{ local_ip }}</div>
+        </div>
+        
+        <div class="manual-entry">
+            <h3>🔧 Manual Setup (Optional)</h3>
+            <p>If automatic pairing doesn't work, you can manually enter the backend URL in the PWA settings:</p>
+            <input type="text" value="{{ api_endpoint }}" readonly id="manual-endpoint">
+            <button class="copy-btn" onclick="copyToClipboard('{{ api_endpoint }}')">Copy URL</button>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Show a brief success indication
+                event.target.textContent = 'Copied!';
+                setTimeout(() => {
+                    event.target.textContent = 'Copy';
+                }, 2000);
+            }).catch(function(err) {
+                console.error('Could not copy text: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                event.target.textContent = 'Copied!';
+                setTimeout(() => {
+                    event.target.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+        
+        // Auto-redirect to PWA after a delay (optional)
+        setTimeout(() => {
+            const installBtn = document.querySelector('.install-btn');
+            if (installBtn && !document.hidden) {
+                installBtn.style.animation = 'pulse 1s infinite';
+            }
+        }, 3000);
+    </script>
+    
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</body>
+</html>

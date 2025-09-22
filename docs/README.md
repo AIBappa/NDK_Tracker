@@ -4,7 +4,7 @@ A comprehensive Progressive Web App (PWA) and local backend system for tracking 
 
 ## Overview
 
-The Autism Tracker consists of two main components:
+The NDK Tracker consists of two main components:
 - **Backend**: A FastAPI server that runs locally on your laptop (.exe file)
 - **Frontend**: A React PWA that installs on mobile devices from the browser
 
@@ -85,7 +85,7 @@ NDK_Tracker/
 ├── backend/
 │   ├── main.py              # FastAPI application
 │   ├── requirements.txt     # Python dependencies
-│   ├── autism_tracker_backend.spec  # PyInstaller spec
+│   ├── NDK_tracker_backend.spec  # PyInstaller spec
 │   └── README.md           # Backend documentation
 ├── frontend/
 │   ├── src/

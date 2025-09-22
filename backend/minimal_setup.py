@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Minimal setup script for Autism Tracker
+Minimal setup script for NDK Tracker
 Combines model download and backend startup in        logging.info(\"Backend imported successfully!\")
         
         # Test model initialization before starting server
@@ -29,16 +29,79 @@ import sys
 import subprocess
 import argparse
 from pathlib import Path
+from typing import Optional
 import requests
 import time
 import logging
 import traceback
+import ipaddress
+import socket
+from concurrent.futures import ThreadPoolExecutor
+
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from datetime import datetime, timedelta
 
 # Minimal model - smaller GGUF for easier distribution
 MINIMAL_MODEL = {
     "url": "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
     "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 }
+
+def find_existing_model(models_dir: Path) -> Optional[Path]:
+    """Search for an existing GGUF model in common locations.
+    Preference: models next to the executable (for packaged app), then provided models_dir,
+    then CWD/models, then any .gguf in CWD. Avoid backend script directory when frozen to
+    prevent scattering models in source folders.
+    """
+    candidates: list[Path] = []
+    try:
+        # Executable directory (PyInstaller onefile) / models has highest priority when frozen
+        if getattr(sys, 'frozen', False):
+            exe_dir = Path(sys.executable).parent
+            candidates.append(exe_dir / 'models')
+        # Primary requested directory (defaults to ./models relative to CWD)
+        candidates.append(models_dir)
+        # Current working dir / models
+        candidates.append(Path.cwd() / 'models')
+        # Only include script directory when not frozen (development runs)
+        if not getattr(sys, 'frozen', False):
+            candidates.append(Path(__file__).resolve().parent / 'models')
+        # Current working dir (flat)
+        candidates.append(Path.cwd())
+    except Exception:
+        pass
+
+    logging.info("Model search paths (in order):")
+    for p in candidates:
+        logging.info(f" - {p}")
+
+    # First, try exact filename in any candidate dir
+    for base in candidates:
+        try:
+            if base and base.exists():
+                target = base / MINIMAL_MODEL["filename"]
+                if target.exists():
+                    logging.info(f"Found existing model: {target}")
+                    return target
+        except Exception:
+            continue
+
+    # Fallback: any .gguf in candidates (first one)
+    for base in candidates:
+        try:
+            if base and base.exists():
+                matches = list(base.glob('*.gguf'))
+                if matches:
+                    logging.info(f"Found alternative model: {matches[0]}")
+                    return matches[0]
+        except Exception:
+            continue
+
+    logging.info("No existing model found in candidate paths.")
+    return None
 
 def download_minimal_model(models_dir: Path):
     """Download minimal model for testing"""
@@ -76,7 +139,7 @@ def download_minimal_model(models_dir: Path):
 
 def setup_logging(models_dir: Path):
     """Setup logging to capture errors"""
-    log_file = models_dir / "autism_tracker.log"
+    log_file = models_dir / "NDK_tracker.log"
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -99,18 +162,33 @@ def check_ollama_available():
 
 def start_backend(models_dir: Path):
     """Start the backend server"""
-    print("Starting Autism Tracker backend...")
+    print("Starting NDK Tracker backend...")
     
     # Setup logging
     log_file = setup_logging(models_dir)
     logging.info(f"Log file: {log_file}")
 
-    # Set environment variable for model path
+    # Determine model path to use
     env = os.environ.copy()
-    env['LLAMA_CPP_MODEL_PATH'] = str(models_dir / MINIMAL_MODEL["filename"])
+    pre_set = env.get('LLAMA_CPP_MODEL_PATH')
+    if pre_set and Path(pre_set).exists():
+        model_path = Path(pre_set)
+        logging.info(f"Using pre-set LLAMA_CPP_MODEL_PATH: {model_path}")
+    else:
+        existing = find_existing_model(models_dir)
+        if existing and existing.exists():
+            model_path = existing
+        else:
+            model_path = models_dir / MINIMAL_MODEL["filename"]
+        env['LLAMA_CPP_MODEL_PATH'] = str(model_path)
+    logging.info(f"Final model path: {env.get('LLAMA_CPP_MODEL_PATH')}")
     
     # Force llama-cpp backend since we're using a GGUF model
     env['DEFAULT_LLM_BACKEND'] = 'llamacpp'
+    # Update current process environment so backend can read these
+    os.environ['DEFAULT_LLM_BACKEND'] = env['DEFAULT_LLM_BACKEND']
+    if 'LLAMA_CPP_MODEL_PATH' in env:
+        os.environ['LLAMA_CPP_MODEL_PATH'] = env['LLAMA_CPP_MODEL_PATH']
     
     # Check Ollama availability
     ollama_available = check_ollama_available()
@@ -135,12 +213,94 @@ def start_backend(models_dir: Path):
         import uvicorn
 
         logging.info("Backend imported successfully!")
+
+        # Prepare HTTPS certificate
+        certs_dir = models_dir / "certs"
+        certs_dir.mkdir(parents=True, exist_ok=True)
+        cert_file = certs_dir / "ndk_selfsigned.crt"
+        key_file = certs_dir / "ndk_selfsigned.key"
+
+        def get_local_ip() -> str:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+                return ip
+            except Exception:
+                return "127.0.0.1"
+
+        def ensure_self_signed_cert():
+            try:
+                if cert_file.exists() and key_file.exists():
+                    return
+                logging.info("Generating self-signed certificate for HTTPS...")
+                key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+                subject = issuer = x509.Name([
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, u"US"),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"NDK Tracker"),
+                    x509.NameAttribute(NameOID.COMMON_NAME, u"NDK Local"),
+                ])
+                alt_names = [
+                    x509.DNSName(u"localhost"),
+                ]
+                # Add local IP as IP SAN
+                local_ip = get_local_ip()
+                try:
+                    alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
+                except Exception:
+                    pass
+                san = x509.SubjectAlternativeName(alt_names)
+                cert = (
+                    x509.CertificateBuilder()
+                    .subject_name(subject)
+                    .issuer_name(issuer)
+                    .public_key(key.public_key())
+                    .serial_number(x509.random_serial_number())
+                    .not_valid_before(datetime.utcnow() - timedelta(minutes=1))
+                    .not_valid_after(datetime.utcnow() + timedelta(days=3650))
+                    .add_extension(san, critical=False)
+                    .sign(key, hashes.SHA256())
+                )
+                with open(key_file, "wb") as f:
+                    f.write(
+                        key.private_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PrivateFormat.TraditionalOpenSSL,
+                            encryption_algorithm=serialization.NoEncryption(),
+                        )
+                    )
+                with open(cert_file, "wb") as f:
+                    f.write(cert.public_bytes(serialization.Encoding.PEM))
+                logging.info(f"Self-signed cert generated at {certs_dir}")
+            except Exception:
+                logging.error("Failed to create self-signed cert:")
+                logging.error(traceback.format_exc())
+
+        ensure_self_signed_cert()
+
         print("Backend started successfully!")
-        print("Access the API at: http://localhost:8000")
+        print("Access the API at: http://localhost:8000 (HTTP)")
+        print("Also available at: https://<your-ip>:8443 (HTTPS, self-signed)")
         print("Press Ctrl+C to stop")
         print(f"Logs are saved to: {log_file}")
 
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        # Run HTTP and HTTPS servers in parallel
+        def run_http():
+            uvicorn.run(app, host="0.0.0.0", port=8000)
+
+        def run_https():
+            uvicorn.run(
+                app,
+                host="0.0.0.0",
+                port=8443,
+                ssl_certfile=str(cert_file),
+                ssl_keyfile=str(key_file),
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pool.submit(run_http)
+            run_https()
 
     except ImportError as e:
         error_msg = f"Error importing backend: {e}"
@@ -160,7 +320,7 @@ def start_backend(models_dir: Path):
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Minimal Autism Tracker Setup")
+    parser = argparse.ArgumentParser(description="Minimal NDK Tracker Setup")
     parser.add_argument("--models-dir", type=str, default="./models",
                        help="Directory to store models")
     parser.add_argument("--skip-download", action="store_true",
@@ -170,14 +330,21 @@ def main():
 
     models_dir = Path(args.models_dir).absolute()
 
-    print("=== Autism Tracker Minimal Setup ===")
+    print("=== NDK Tracker Minimal Setup ===")
     print(f"Models directory: {models_dir}")
 
-    # Download model if needed
-    if not args.skip_download:
-        if not download_minimal_model(models_dir):
-            print("Failed to download model")
-            return 1
+    # If a model already exists in common paths, skip download.
+    existing_model = find_existing_model(models_dir)
+    if existing_model:
+        print(f"Using existing model at: {existing_model}")
+    else:
+        # Download model if needed (unless explicitly skipped)
+        if not args.skip_download:
+            if not download_minimal_model(models_dir):
+                print("Failed to download model")
+                return 1
+        else:
+            print("--skip-download provided and no model found; backend may fail to start without a model.")
 
     # Start backend
     start_backend(models_dir)

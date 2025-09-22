@@ -1,6 +1,6 @@
-# Autism Tracker Setup Guide
+# NDK Tracker Setup Guide
 
-This guide will help you set up and run the Autism Tracker application for development.
+This guide will help you set up and run the NDK Tracker application for development.
 
 ## System Requirements
 
@@ -76,13 +76,13 @@ This guide will help you set up and run the Autism Tracker application for devel
 1. **Environment Setup**
    ```bash
    cd backend
-   python -m venv autism_tracker_env
+   python -m venv NDK_tracker_env
    
    # Windows
-   autism_tracker_env\Scripts\activate
+   NDK_tracker_env\Scripts\activate
    
    # macOS/Linux
-   source autism_tracker_env/bin/activate
+   source NDK_tracker_env/bin/activate
    
    pip install -r requirements.txt
    ```
@@ -146,10 +146,10 @@ This guide will help you set up and run the Autism Tracker application for devel
 2. **Build Executable**
    ```bash
    cd backend
-   pyinstaller autism_tracker_backend.spec
+   pyinstaller NDK_tracker_backend.spec
    ```
    
-   The `.exe` file will be in `dist/autism_tracker_backend.exe`
+   The `.exe` file will be in `dist/NDK_tracker_backend.exe`
 
 ### Frontend PWA Build
 

@@ -11,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from zeroconf import ServiceInfo, Zeroconf
@@ -40,18 +40,35 @@ class SettingsConfig(BaseModel):
     accessibility: Dict[str, Any] = {}
 
 # Initialize FastAPI app
-app = FastAPI(title="Autism Tracker Backend", version="1.0.0")
+app = FastAPI(title="NDK Tracker Backend", version="1.0.0")
 
 # Initialize templates with PyInstaller-compatible path
 import sys
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller bundle
     template_dir = Path(sys._MEIPASS) / "templates"
+    frontend_dir = Path(sys._MEIPASS) / "frontend" / "build"
 else:
     # Running as script
     template_dir = "templates"
+    frontend_dir = Path("../frontend/build")
 
 templates = Jinja2Templates(directory=str(template_dir))
+
+# Mount PWA static files if they exist
+if frontend_dir.exists():
+    app.mount("/pwa", StaticFiles(directory=str(frontend_dir), html=True), name="pwa")
+    print(f"PWA mounted at /pwa from {frontend_dir}")
+else:
+    print(f"PWA files not found at {frontend_dir}")
+
+@app.get("/pwa", response_class=HTMLResponse)
+async def pwa_root():
+    """Serve PWA index for /pwa (no trailing slash) to prevent 307 redirect issues"""
+    index_path = Path(frontend_dir) / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    raise HTTPException(status_code=404, detail="PWA not built. Run npm run build in frontend/")
 
 # CORS middleware to allow PWA access
 app.add_middleware(
@@ -443,9 +460,18 @@ def generate_qr_code(data: str) -> str:
 
 # API Endpoints
 
+def _build_base_url(request: Request) -> str:
+    """Build base URL (scheme://host:port) from the incoming request to avoid hardcoded ports"""
+    # request.url.scheme can be http/https
+    scheme = request.url.scheme
+    # Use host header (may include port) or fallback to url components
+    host = request.headers.get("host") or request.client.host
+    return f"{scheme}://{host}"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root endpoint with web interface"""
+    """Serve the main pairing page with QR code at root"""
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/status", response_class=HTMLResponse)
@@ -454,40 +480,70 @@ async def status_page(request: Request):
     return templates.TemplateResponse("status.html", {"request": request})
 
 @app.get("/api")
-async def root_api():
+async def root_api(request: Request):
     """API version of root endpoint (for backward compatibility)"""
     local_ip = get_local_ip()
-    port = 8080  # Default port
-    endpoint_url = f"http://{local_ip}:{port}"
+    base_url = _build_base_url(request)
     
     return {
-        "message": "Autism Tracker Backend",
+        "message": "NDK Tracker Backend",
         "status": "running",
         "pairing_info": {
-            "endpoint": endpoint_url,
-            "qr_code": generate_qr_code(endpoint_url),
+            "endpoint": base_url,
+            "qr_code": generate_qr_code(base_url),
             "local_ip": local_ip,
-            "port": port
+            "port": request.url.port
         }
     }
 
+@app.get("/pair", response_class=HTMLResponse)
+async def pairing_page(request: Request):
+    """Pairing page with PWA install link"""
+    local_ip = get_local_ip()
+    scheme = request.url.scheme
+    port = request.url.port or 8000
+    # Prefer HTTPS port 8443 if available
+    https_port = 8443
+    lan_https = f"https://{local_ip}:{https_port}"
+    lan_http = f"http://{local_ip}:{port}"
+    lan_base = lan_https
+    # Pass backend URL to PWA so it can auto-configure on first launch
+    pwa_url = f"{lan_base}/pwa?backend={lan_base}"
+    api_endpoint = lan_base
+    
+    return templates.TemplateResponse("pairing.html", {
+        "request": request,
+        "pwa_url": pwa_url,
+        "api_endpoint": api_endpoint,
+        "local_ip": local_ip,
+        "port": port
+    })
+
 @app.get("/pairing/info")
-async def get_pairing_info():
+async def get_pairing_info(request: Request):
     """Get pairing information for QR code display"""
     local_ip = get_local_ip()
-    port = 8080
-    endpoint_url = f"http://{local_ip}:{port}"
+    scheme = request.url.scheme
+    port = request.url.port or 8000
+    host_base = _build_base_url(request)
+    https_port = 8443
+    lan_https = f"https://{local_ip}:{https_port}"
+    lan_http = f"http://{local_ip}:{port}"
+    pairing_url = f"{lan_https}/pair"
     
     return {
-        "endpoint": endpoint_url,
-        "qr_code": generate_qr_code(endpoint_url),
+        "endpoint": host_base,
+        "endpoint_lan": lan_https,
+        "endpoint_lan_http": lan_http,
+        "pairing_url": pairing_url,
+        "qr_code": generate_qr_code(pairing_url),
         "local_ip": local_ip,
         "port": port,
         "instructions": [
-            "1. Open the Autism Tracker PWA on your mobile device",
-            "2. Tap 'Scan QR to pair' on the PWA",
-            "3. Point your device camera at the QR code above",
-            "4. Your device will automatically connect to this backend"
+            "1. Scan the QR code with your mobile device camera",
+            "2. This will open the pairing page in your browser (you may need to accept a self-signed certificate warning)",
+            "3. Tap 'Install PWA' to download the NDK Tracker app",
+            "4. Open the installed PWA and it will connect automatically"
         ]
     }
 
@@ -763,14 +819,14 @@ async def health_check():
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='Autism Tracker Backend')
+    parser = argparse.ArgumentParser(description='NDK Tracker Backend')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--port', type=int, default=8080, help='Port to bind to')
     parser.add_argument('--reload', action='store_true', help='Enable auto-reload for development')
     
     args = parser.parse_args()
     
-    print(f"Starting Autism Tracker Backend on {args.host}:{args.port}")
+    print(f"Starting NDK Tracker Backend on {args.host}:{args.port}")
     print(f"Local IP: {get_local_ip()}")
     print(f"LLM Available: {llm_processor.ollama_available}")
     

@@ -144,9 +144,9 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
   return (
     <div className="pairing-screen">
       <div className="card">
-        <h2>Connect to Autism Tracker Backend</h2>
+        <h2>Connect to NDK Tracker Backend</h2>
         <p>
-          To get started, you need to connect to the Autism Tracker backend 
+          To get started, you need to connect to the NDK Tracker backend 
           running on your laptop. Choose one of the options below:
         </p>
 
@@ -289,7 +289,7 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
         <div className="help-content">
           <p><strong>Make sure your laptop backend is running:</strong></p>
           <ol>
-            <li>Start the Autism Tracker backend on your laptop</li>
+            <li>Start the NDK Tracker backend on your laptop</li>
             <li>Look for the QR code on the laptop screen</li>
             <li>Make sure both devices are on the same WiFi network</li>
           </ol>

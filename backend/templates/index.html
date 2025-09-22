@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Autism Tracker Backend</title>
+    <title>NDK Tracker Backend</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -168,7 +168,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧩 Autism Tracker Backend</h1>
+            <h1>🧩 NDK Tracker Backend</h1>
             <p>Local server for privacy-first tracking</p>
         </div>
         
@@ -178,7 +178,7 @@
         
         <div class="qr-section">
             <h2>📱 Connect Your Mobile Device</h2>
-            <p>Scan this QR code with the Autism Tracker PWA to connect:</p>
+            <p>Scan this QR code with the NDK Tracker PWA to connect:</p>
             
             <div class="qr-code" id="qr-container">
                 <div>Loading QR code...</div>
@@ -195,7 +195,7 @@
         <div class="instructions">
             <h3>📋 How to Connect</h3>
             <ol>
-                <li>Open the Autism Tracker PWA on your mobile device</li>
+                <li>Open the NDK Tracker PWA on your mobile device</li>
                 <li>Tap "Scan QR to pair" on the PWA</li>
                 <li>Point your device camera at the QR code above</li>
                 <li>Your device will automatically connect to this backend</li>
@@ -256,8 +256,18 @@
                 qrContainer.innerHTML = `<img src="${data.qr_code}" alt="QR Code for pairing" />`;
                 
                 // Update endpoint info
-                document.getElementById('endpoint-url').textContent = data.endpoint;
+                // Prefer LAN endpoint for mobile devices
+                const preferredEndpoint = data.endpoint_lan || data.endpoint;
+                document.getElementById('endpoint-url').textContent = preferredEndpoint;
                 document.getElementById('local-ip').textContent = data.local_ip;
+                // Show HTTP fallback if provided
+                if (data.endpoint_lan_http) {
+                    const info = document.getElementById('endpoint-info');
+                    const p = document.createElement('div');
+                    p.style.marginTop = '8px';
+                    p.innerHTML = `<strong>HTTP fallback:</strong> ${data.endpoint_lan_http}`;
+                    info.appendChild(p);
+                }
                 
             } catch (error) {
                 console.error('Failed to load pairing info:', error);

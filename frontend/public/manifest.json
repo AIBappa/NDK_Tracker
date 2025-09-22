@@ -1,6 +1,6 @@
 {
-  "short_name": "Autism Tracker",
-  "name": "Autism Tracker - Family Health Tracker PWA",
+  "short_name": "NDK Tracker",
+  "name": "NDK Tracker - Family Health Tracker PWA",
   "description": "Privacy-first family health tracker for neurodiverse children",
   "icons": [
     {
@@ -19,12 +19,12 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/pwa/",
   "display": "standalone",
   "theme_color": "#2196f3",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
-  "scope": "/",
+  "scope": "/pwa/",
   "categories": ["health", "medical", "family", "accessibility"],
   "screenshots": [
     {
