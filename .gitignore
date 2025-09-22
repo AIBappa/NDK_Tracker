@@ -22,6 +22,9 @@ backend/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 #Ignore logs
 *.log
 
+#Ignore Issues
+Issues
+
 #Ignore frontend node_modules
 frontend/node_modules/
 
