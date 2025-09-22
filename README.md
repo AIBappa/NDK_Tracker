@@ -1,10 +1,10 @@
-# NDK Tracker
-
+# Neuro Diverse Kid Tracker
 A privacy-first family health tracker PWA for neurodiverse children with local data storage and voice-first interaction.
 
 ## Quick Start
 
 ### Backend (Laptop)
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -12,6 +12,7 @@ python main.py
 ```
 
 ### Frontend (Mobile PWA)
+
 ```bash
 cd frontend
 npm install
@@ -119,5 +120,4 @@ This keeps the UX smooth: parents can continue logging even during brief outages
 - Data stored as JSON files you fully control
 
 ## License
-
-[Add license information]
+Licensed under the Apache License 2.0
