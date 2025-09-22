@@ -1,4 +1,5 @@
 {
+  "id": "/pwa",
   "short_name": "NDK Tracker",
   "name": "NDK Tracker - Family Health Tracker PWA",
   "description": "Privacy-first family health tracker for neurodiverse children",
@@ -39,7 +40,7 @@
       "name": "Quick Log",
       "short_name": "Log",
       "description": "Quickly log an activity",
-      "url": "/",
+      "url": "/pwa/",
       "icons": [
         {
           "src": "logo192.png",
@@ -52,7 +53,7 @@
       "name": "View Timeline",
       "short_name": "Timeline", 
       "description": "View activity timeline",
-      "url": "/?view=timeline",
+      "url": "/pwa/?view=timeline",
       "icons": [
         {
           "src": "logo192.png",

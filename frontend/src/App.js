@@ -22,6 +22,7 @@ function App() {
   });
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [justInstalled, setJustInstalled] = useState(false);
+  const [autoInstallRequested, setAutoInstallRequested] = useState(false);
 
   // Initialize services
   const apiService = new ApiService(backendUrl);
@@ -94,6 +95,22 @@ function App() {
     // We intentionally do not include speechService to avoid retriggering
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // If pairing page asked for install (install=1), prompt automatically when possible
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('install') === '1' && deferredPrompt && !autoInstallRequested) {
+      setAutoInstallRequested(true);
+      (async () => {
+        try {
+          deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+        } catch (_) {
+          // ignore
+        }
+      })();
+    }
+  }, [deferredPrompt, autoInstallRequested]);
 
   const testConnection = async () => {
     try {

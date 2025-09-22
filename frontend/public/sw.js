@@ -1,45 +1,31 @@
-const CACHE_NAME = 'NDK-tracker-v1';
-const urlsToCache = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
-  '/manifest.json',
-  '/favicon.ico'
+/* eslint-env serviceworker */
+const CACHE_NAME = 'ndk-tracker-cache-v2';
+const OFFLINE_URLS = [
+  `${self.registration.scope}`,
+  `${self.registration.scope}index.html`,
+  `${self.registration.scope}manifest.json`,
+  `${self.registration.scope}favicon.ico`,
 ];
 
-// Install service worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS))
   );
+  self.skipWaiting();
 });
 
-// Fetch event - serve from cache when offline
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      }
-    )
-  );
-});
-
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((keys) => Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null))))
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  event.respondWith(
+    caches.match(req).then((cached) =>
+      cached || fetch(req).catch(() => caches.match(`${self.registration.scope}index.html`))
+    )
   );
 });

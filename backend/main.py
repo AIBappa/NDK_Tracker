@@ -507,8 +507,8 @@ async def pairing_page(request: Request):
     lan_https = f"https://{local_ip}:{https_port}"
     lan_http = f"http://{local_ip}:{port}"
     lan_base = lan_https
-    # Pass backend URL to PWA so it can auto-configure on first launch
-    pwa_url = f"{lan_base}/pwa?backend={lan_base}"
+    # Pass backend URL and install hint to PWA so it can auto-configure and prompt install
+    pwa_url = f"{lan_base}/pwa?backend={lan_base}&install=1"
     api_endpoint = lan_base
     
     return templates.TemplateResponse("pairing.html", {
