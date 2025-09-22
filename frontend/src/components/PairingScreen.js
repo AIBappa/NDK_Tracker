@@ -9,6 +9,9 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const qrCodeScannerRef = useRef(null);
   const scannerRef = useRef(null);
 
@@ -26,15 +29,17 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
     try {
       setError('');
       setIsScanning(true);
+      setLogs(prev => [...prev, 'Starting QR scanner...']);
 
       // Request camera permission
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(track => track.stop()); // Stop stream immediately
 
-      const scanner = new Html5Qrcode("qr-code-scanner");
+  const scanner = new Html5Qrcode("qr-code-scanner");
       scannerRef.current = scanner;
 
       const qrCodeSuccessCallback = async (decodedText) => {
+        setLogs(prev => [...prev, `QR decoded: ${decodedText}`]);
         await stopQRScanner();
         await connectToBackend(decodedText);
       };
@@ -58,6 +63,7 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
 
     } catch (error) {
       setError('Failed to start camera. Please check permissions or enter URL manually.');
+      setLogs(prev => [...prev, `Camera start failed: ${error}`]);
       setIsScanning(false);
     }
   };
@@ -77,6 +83,7 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
   const connectToBackend = async (url) => {
     setIsConnecting(true);
     setError('');
+    setLogs(prev => [...prev, `Connecting to: ${url}`]);
 
     try {
       // Clean URL
@@ -88,18 +95,21 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
       // Test connection
       const isConnected = await ApiService.testConnection(cleanUrl);
       if (isConnected) {
+        setLogs(prev => [...prev, `Connected to: ${cleanUrl}`]);
         onPairingSuccess(cleanUrl);
         if (speechService && speechService.isSupported) {
           speechService.speak('Successfully connected to backend.');
         }
       } else {
         setError('Failed to connect to backend. Please check the URL and try again.');
+        setLogs(prev => [...prev, `Connection failed: ${cleanUrl}`]);
         if (speechService && speechService.isSupported) {
           speechService.speak('Failed to connect. Please check the URL and try again.');
         }
       }
     } catch (error) {
       setError('Connection failed. Please check the URL and your network connection.');
+      setLogs(prev => [...prev, `Error: ${error}`]);
     } finally {
       setIsConnecting(false);
     }
@@ -188,27 +198,97 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
           <span>OR</span>
         </div>
 
-        {/* Network Discovery */}
+        {/* Advanced Options Toggle */}
         <div className="pairing-option">
-          <h3>Option 2: Auto-Discover</h3>
-          <p>Automatically search for the backend on your local network.</p>
-          
-          <button 
-            className="btn btn-secondary btn-large"
-            onClick={discoverBackend}
-            disabled={isScanning || isConnecting || isDiscovering}
-            aria-label="Auto-discover backend"
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowAdvanced(v => !v)}
+            aria-expanded={showAdvanced}
+            aria-controls="advanced-options"
           >
-            {isDiscovering ? (
-              <>
-                <div className="spinner" style={{ width: '20px', height: '20px' }}></div>
-                Searching...
-              </>
-            ) : (
-              <>🔍 Auto-Discover</>
-            )}
+            {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
           </button>
         </div>
+
+        {showAdvanced && (
+          <div id="advanced-options" className="advanced-options">
+            {/* Network Discovery */}
+            <div className="pairing-option">
+              <h3>Auto-Discover</h3>
+              <p>Search for the backend on your local network.</p>
+              <button 
+                className="btn btn-secondary btn-large"
+                onClick={discoverBackend}
+                disabled={isScanning || isConnecting || isDiscovering}
+                aria-label="Auto-discover backend"
+              >
+                {isDiscovering ? (
+                  <>
+                    <div className="spinner" style={{ width: '20px', height: '20px' }}></div>
+                    Searching...
+                  </>
+                ) : (
+                  <>🔍 Auto-Discover</>
+                )}
+              </button>
+            </div>
+
+            {/* Manual Entry */}
+            <div className="pairing-option">
+              <h3>Manual Entry</h3>
+              <p>Enter the backend URL (e.g., http://192.168.1.100:8080).</p>
+              {!showManualEntry ? (
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setShowManualEntry(true)}
+                  disabled={isScanning || isConnecting || isDiscovering}
+                >
+                  Enter URL Manually
+                </button>
+              ) : (
+                <form onSubmit={handleManualConnect} className="manual-entry-form">
+                  <div className="form-group">
+                    <label htmlFor="manual-url">Backend URL:</label>
+                    <input
+                      id="manual-url"
+                      type="url"
+                      className="form-input"
+                      placeholder="http://192.168.1.100:8080"
+                      value={manualUrl}
+                      onChange={(e) => setManualUrl(e.target.value)}
+                      disabled={isConnecting}
+                      aria-describedby="url-help"
+                    />
+                    <small id="url-help">
+                      Enter the full URL including http:// and port number
+                    </small>
+                  </div>
+                  
+                  <div className="form-actions">
+                    <button 
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={!manualUrl.trim() || isConnecting}
+                    >
+                      {isConnecting ? 'Connecting...' : 'Connect'}
+                    </button>
+                    <button 
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowManualEntry(false);
+                        setManualUrl('');
+                      }}
+                      disabled={isConnecting}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="divider">
           <span>OR</span>
@@ -275,6 +355,23 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
           <div className="connection-status">
             <div className="spinner"></div>
             <p>Connecting to backend...</p>
+          </div>
+        )}
+      </div>
+
+      {/* Logs + Help */}
+      <div className="card">
+        <button
+          className="btn btn-secondary"
+          onClick={() => setShowLogs(v => !v)}
+          aria-expanded={showLogs}
+          aria-controls="pairing-logs"
+        >
+          {showLogs ? 'Hide Logs' : 'Show Logs'}
+        </button>
+        {showLogs && (
+          <div id="pairing-logs" className="logs" style={{ textAlign: 'left', marginTop: '0.75rem' }}>
+            <pre style={{ whiteSpace: 'pre-wrap' }}>{logs.join('\n')}</pre>
           </div>
         )}
       </div>
