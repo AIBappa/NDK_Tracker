@@ -38,6 +38,7 @@ import traceback
 import ipaddress
 import socket
 from concurrent.futures import ThreadPoolExecutor
+import qrcode
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -302,7 +303,22 @@ def start_backend(models_dir: Path):
         print("Backend started successfully!")
         print(f"Access the API at: http://{local_ip}:8000 (HTTP)")
         print(f"Also available at: https://{local_ip}:8443 (HTTPS, self-signed)")
-        print(f"Pairing page:     https://{local_ip}:8443/pair")
+        pairing_url = f"https://{local_ip}:8443/pair"
+        print(f"Pairing page:     {pairing_url}")
+        # Print QR in console for quick mobile scan
+        try:
+            qr = qrcode.QRCode(border=1)
+            qr.add_data(pairing_url)
+            qr.make(fit=True)
+            print("\nScan this QR to open pairing (HTTPS):")
+            # Invert for dark terminals; fallback to default if not supported
+            try:
+                qr.print_ascii(invert=True)
+            except Exception:
+                qr.print_ascii()
+            print("")
+        except Exception as e:
+            logging.info(f"Console QR printing skipped: {e}")
         print("Press Ctrl+C to stop")
         print(f"Logs are saved to: {log_file}")
 
