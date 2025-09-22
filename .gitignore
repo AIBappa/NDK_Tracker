@@ -5,6 +5,13 @@ backend/.venv/
 backend/build/
 backend/_pycache__/
 
+# Ignore distribution artifacts (root and backend)
+dist/
+backend/dist/
+
+# Ignore embedded frontend build under backend
+backend/frontend/build/
+
 # Ignore binary file(s)
 backend/dist/NDK_tracker_setup_ui.exe
 
@@ -21,3 +28,6 @@ frontend/node_modules/
 #Ignore frontend build files
 frontend/build/
 backend/__pycache__/main.cpython-313.pyc
+
+# General Python cache
+**/__pycache__/

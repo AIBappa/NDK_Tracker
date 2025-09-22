@@ -48,12 +48,13 @@ Use the one-shot script to package the app (PWA + backend) in a single pass. Run
 
 1. Ensure Node.js and Python are installed
 2. Run the packager:
-	 - `./build_package.ps1`
+   - `./build_package.ps1`
 3. Results:
-	 - `dist/` contains the generated Windows `.exe` (from `backend/dist`) and
-	 - `dist/pwa/` contains the standalone PWA files (optional hosting)
+   - `dist/` contains the generated Windows `.exe` (from `backend/dist`)
+   - `dist/pwa/` contains the standalone PWA files (optional hosting)
 
 The script will:
+
 - Build the React PWA (frontend/build)
 - Mirror it into `backend/frontend/build` (served at `/pwa`)
 - Ensure `backend/.venv` exists and install Python deps
@@ -64,11 +65,13 @@ The script will:
 The PWA includes a small helper (`frontend/src/services/SyncService.js`) that ensures logs are not lost if the backend is temporarily unreachable.
 
 How it works:
+
 - When you submit a log, the app tries to POST to the backend (`/input/log`).
 - If the request fails (WiFi drop, backend down), the log is added to a local queue in IndexedDB (`log-queue`).
 - When connectivity returns (browser `online` event), the app automatically replays queued items to the backend.
 
 Key APIs:
+
 - `sendOrQueue(session, backendUrl)`: try sending now, otherwise queue.
 - `flushQueue(backendUrl)`: replay all queued items to the backend.
 - `setupOnlineFlush(backendUrlProvider)`: installs an `online` listener that calls `flushQueue` when the network returns.
@@ -80,21 +83,21 @@ Minimal wiring example in your app component:
 import { sendOrQueue, setupOnlineFlush } from './services/SyncService';
 
 function getBackendUrl() {
-	return localStorage.getItem('ndk_backend_url');
+  return localStorage.getItem('ndk_backend_url');
 }
 
 // On mount, set up auto-flush when network comes back
 useEffect(() => {
-	const teardown = setupOnlineFlush(getBackendUrl);
-	return teardown;
+  const teardown = setupOnlineFlush(getBackendUrl);
+  return teardown;
 }, []);
 
 async function handleSubmitLog(session) {
-	const backendUrl = getBackendUrl();
-	const result = await sendOrQueue(session, backendUrl);
-	if (result.status === 'queued') {
-		// Show a friendly toast/snackbar: "Saved locally; will sync when online"
-	}
+  const backendUrl = getBackendUrl();
+  const result = await sendOrQueue(session, backendUrl);
+  if (result.status === 'queued') {
+    // Show a friendly toast/snackbar: "Saved locally; will sync when online"
+  }
 }
 ```
 

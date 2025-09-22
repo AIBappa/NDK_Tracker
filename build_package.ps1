@@ -13,6 +13,12 @@ $frontendDir = Join-Path $repoRoot 'frontend'
 $backendDir = Join-Path $repoRoot 'backend'
 $backendVenv = Join-Path $backendDir '.venv'
 
+# Clean previous build artifacts to avoid stale names (e.g., autism_tracker_setup)
+Write-Host "[1.1/6] Cleaning old build artifacts" -ForegroundColor DarkCyan
+if (Test-Path (Join-Path $backendDir 'build')) { Remove-Item -Recurse -Force (Join-Path $backendDir 'build') }
+if (Test-Path (Join-Path $backendDir 'dist')) { Remove-Item -Recurse -Force (Join-Path $backendDir 'dist') }
+if (Test-Path (Join-Path $repoRoot 'dist'))     { Remove-Item -Recurse -Force (Join-Path $repoRoot 'dist') }
+
 if (-not (Test-Path $frontendDir)) { throw "Missing frontend directory: $frontendDir" }
 if (-not (Test-Path $backendDir)) { throw "Missing backend directory: $backendDir" }
 
@@ -34,20 +40,40 @@ robocopy (Join-Path $frontendDir 'build') $backendPwaDir /MIR | Out-Null
 
 Write-Host "[4/6] Ensuring backend venv and Python deps" -ForegroundColor Cyan
 Push-Location $backendDir
-$activateScript = Join-Path $backendVenv 'Scripts/Activate.ps1'
-if (-not (Test-Path $activateScript)) {
+$venvPython = Join-Path $backendVenv 'Scripts/python.exe'
+
+# Create venv if missing
+if (-not (Test-Path $venvPython)) {
   Write-Host "No backend venv found at $backendVenv. Creating..." -ForegroundColor Yellow
   python -m venv .venv
 }
-& $activateScript
-pip install -r requirements.txt
+
+# Guard: If this venv was created in a different repo path (e.g., Autism_Tracker), recreate it
+$pyvenvCfg = Join-Path $backendVenv 'pyvenv.cfg'
+if (Test-Path $pyvenvCfg) {
+  $cfg = Get-Content $pyvenvCfg -Raw
+  if ($cfg -match 'Autism_Tracker') {
+    Write-Host "Detected stale venv referencing Autism_Tracker. Recreating backend/.venv..." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force $backendVenv
+    python -m venv .venv
+  }
+}
+
+# Diagnostics
+Write-Host "Using venv python: $venvPython" -ForegroundColor DarkCyan
+& $venvPython --version
+& $venvPython -c "import sys; print('sys.executable =', sys.executable)"
+
+# Install/upgrade pip itself first to avoid stale launchers
+& $venvPython -m pip install --upgrade pip
+# Install requirements via python -m pip to avoid launcher path issues
+& $venvPython -m pip install -r requirements.txt
 Pop-Location
 
 Write-Host "[5/6] Building Windows .exe with PyInstaller" -ForegroundColor Cyan
 Push-Location $backendDir
-& $activateScript
-# Use the existing spec to bundle templates and frontend/build
-pyinstaller --noconfirm NDK_tracker_setup.spec
+# Use python -m to invoke PyInstaller to avoid launcher issues
+& $venvPython -m PyInstaller --noconfirm --log-level DEBUG NDK_tracker_setup.spec
 Pop-Location
 
 Write-Host "[6/6] Creating distribution folder with exe and PWA" -ForegroundColor Cyan
