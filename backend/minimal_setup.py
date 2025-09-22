@@ -27,6 +27,7 @@ Combines model download and backend startup in        logging.info(\"Backend imp
 import os
 import sys
 import subprocess
+import re
 import argparse
 from pathlib import Path
 from typing import Optional
@@ -163,7 +164,7 @@ def check_ollama_available():
 def start_backend(models_dir: Path):
     """Start the backend server"""
     print("Starting NDK Tracker backend...")
-    
+
     # Setup logging
     log_file = setup_logging(models_dir)
     logging.info(f"Log file: {log_file}")
@@ -182,14 +183,14 @@ def start_backend(models_dir: Path):
             model_path = models_dir / MINIMAL_MODEL["filename"]
         env['LLAMA_CPP_MODEL_PATH'] = str(model_path)
     logging.info(f"Final model path: {env.get('LLAMA_CPP_MODEL_PATH')}")
-    
+
     # Force llama-cpp backend since we're using a GGUF model
     env['DEFAULT_LLM_BACKEND'] = 'llamacpp'
     # Update current process environment so backend can read these
     os.environ['DEFAULT_LLM_BACKEND'] = env['DEFAULT_LLM_BACKEND']
     if 'LLAMA_CPP_MODEL_PATH' in env:
         os.environ['LLAMA_CPP_MODEL_PATH'] = env['LLAMA_CPP_MODEL_PATH']
-    
+
     # Check Ollama availability
     ollama_available = check_ollama_available()
     if not ollama_available:
@@ -199,8 +200,6 @@ def start_backend(models_dir: Path):
 
     try:
         # Import and run the backend
-        # In PyInstaller onefile, avoid manipulating sys.path; rely on bundled modules.
-        # Ensure 'main' is included at build time (use --hidden-import=main when building if needed).
         try:
             logging.info("Importing main module...")
             from main import app  # type: ignore
@@ -211,7 +210,6 @@ def start_backend(models_dir: Path):
             app = importlib.import_module("main").app  # type: ignore[attr-defined]
 
         import uvicorn
-
         logging.info("Backend imported successfully!")
 
         # Prepare HTTPS certificate
@@ -230,6 +228,29 @@ def start_backend(models_dir: Path):
             except Exception:
                 return "127.0.0.1"
 
+        def get_lan_ip() -> str:
+            # Try socket method first
+            ip = get_local_ip()
+            if ip and not ip.startswith("127."):
+                return ip
+            # Windows fallback: parse ipconfig
+            try:
+                if sys.platform.startswith('win'):
+                    proc = subprocess.run(["ipconfig"], capture_output=True, text=True, check=False)
+                    output = proc.stdout
+                    # Prefer typical private ranges
+                    for pattern in [r"IPv4 Address[\.\s]*:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)",
+                                    r"inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)"]:
+                        for m in re.finditer(pattern, output):
+                            cand = m.group(1)
+                            if cand.startswith(("192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.",
+                                                "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
+                                                "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.")):
+                                return cand
+            except Exception:
+                pass
+            return ip
+
         def ensure_self_signed_cert():
             try:
                 if cert_file.exists() and key_file.exists():
@@ -241,13 +262,11 @@ def start_backend(models_dir: Path):
                     x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"NDK Tracker"),
                     x509.NameAttribute(NameOID.COMMON_NAME, u"NDK Local"),
                 ])
-                alt_names = [
-                    x509.DNSName(u"localhost"),
-                ]
+                alt_names = [x509.DNSName(u"localhost")]
                 # Add local IP as IP SAN
-                local_ip = get_local_ip()
+                local_ip_for_san = get_local_ip()
                 try:
-                    alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
+                    alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip_for_san)))
                 except Exception:
                     pass
                 san = x509.SubjectAlternativeName(alt_names)
@@ -279,9 +298,11 @@ def start_backend(models_dir: Path):
 
         ensure_self_signed_cert()
 
+        local_ip = get_lan_ip()
         print("Backend started successfully!")
-        print("Access the API at: http://localhost:8000 (HTTP)")
-        print("Also available at: https://<your-ip>:8443 (HTTPS, self-signed)")
+        print(f"Access the API at: http://{local_ip}:8000 (HTTP)")
+        print(f"Also available at: https://{local_ip}:8443 (HTTPS, self-signed)")
+        print(f"Pairing page:     https://{local_ip}:8443/pair")
         print("Press Ctrl+C to stop")
         print(f"Logs are saved to: {log_file}")
 
