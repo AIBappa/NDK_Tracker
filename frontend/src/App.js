@@ -20,11 +20,15 @@ function App() {
       screen_reader: false
     }
   });
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [justInstalled, setJustInstalled] = useState(false);
 
   // Initialize services
   const apiService = new ApiService(backendUrl);
   const speechService = new SpeechService();
 
+  // Initial connection and settings load
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Check if we have a saved backend URL and test connection
     if (backendUrl) {
@@ -37,6 +41,59 @@ function App() {
     // Apply accessibility settings
     applyAccessibilitySettings();
   }, [backendUrl]);
+
+  // Read backend URL from query param during first load (e.g., /pwa?backend=http://192.168.x.x:8000)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const backend = params.get('backend');
+      if (backend) {
+        // Normalize and save
+        let clean = backend.trim();
+        if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+          clean = `http://${clean}`;
+        }
+        localStorage.setItem('backendUrl', clean);
+        setBackendUrl(clean);
+        setIsConnected(false);
+        setCurrentScreen('pairing');
+        // Trigger a quick connection test
+        (async () => {
+          const ok = await ApiService.testConnection(clean);
+          if (ok) {
+            handlePairingSuccess(clean);
+          }
+        })();
+      }
+    } catch (e) {
+      // ignore
+    }
+    // run once on mount only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // PWA install prompt and appinstalled handling
+  useEffect(() => {
+    const onBeforeInstall = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const onAppInstalled = () => {
+      setJustInstalled(true);
+      setDeferredPrompt(null);
+      if (speechService && speechService.isSupported) {
+        speechService.speak('NDK Tracker installed. The app icon should now be on your home screen.');
+      }
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+    // We intentionally do not include speechService to avoid retriggering
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const testConnection = async () => {
     try {
@@ -166,6 +223,21 @@ function App() {
             Connected
           </div>
         )}
+        {/* Simple install CTA if supported */}
+        {deferredPrompt && (
+          <button
+            className="btn btn-secondary"
+            onClick={async () => {
+              deferredPrompt.prompt();
+              const { outcome } = await deferredPrompt.userChoice;
+              if (outcome === 'accepted') {
+                // User accepted install; await appinstalled event
+              }
+            }}
+          >
+            Install App
+          </button>
+        )}
       </header>
       
       <main className="App-main">
@@ -179,6 +251,14 @@ function App() {
           <button onClick={() => setCurrentScreen('pairing')}>
             Reconnect
           </button>
+        </div>
+      )}
+
+      {/* Post-install message */}
+      {justInstalled && (
+        <div className="notification success" role="status" aria-live="polite">
+          <p>NDK Tracker installed. An app icon should now be on your home screen. Open it to continue.</p>
+          <button onClick={() => setJustInstalled(false)}>Dismiss</button>
         </div>
       )}
     </div>

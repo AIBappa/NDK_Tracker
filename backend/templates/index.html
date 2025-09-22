@@ -256,7 +256,9 @@
                 qrContainer.innerHTML = `<img src="${data.qr_code}" alt="QR Code for pairing" />`;
                 
                 // Update endpoint info
-                document.getElementById('endpoint-url').textContent = data.endpoint;
+                // Prefer LAN endpoint for mobile devices
+                const preferredEndpoint = data.endpoint_lan || data.endpoint;
+                document.getElementById('endpoint-url').textContent = preferredEndpoint;
                 document.getElementById('local-ip').textContent = data.local_ip;
                 
             } catch (error) {

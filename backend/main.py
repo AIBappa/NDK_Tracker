@@ -500,31 +500,38 @@ async def root_api(request: Request):
 async def pairing_page(request: Request):
     """Pairing page with PWA install link"""
     local_ip = get_local_ip()
-    base_url = _build_base_url(request)
-    pwa_url = f"{base_url}/pwa"
-    api_endpoint = base_url
+    scheme = request.url.scheme
+    port = request.url.port or 8000
+    lan_base = f"{scheme}://{local_ip}:{port}"
+    # Pass backend URL to PWA so it can auto-configure on first launch
+    pwa_url = f"{lan_base}/pwa?backend={lan_base}"
+    api_endpoint = lan_base
     
     return templates.TemplateResponse("pairing.html", {
         "request": request,
         "pwa_url": pwa_url,
         "api_endpoint": api_endpoint,
         "local_ip": local_ip,
-        "port": request.url.port
+        "port": port
     })
 
 @app.get("/pairing/info")
 async def get_pairing_info(request: Request):
     """Get pairing information for QR code display"""
     local_ip = get_local_ip()
-    base_url = _build_base_url(request)
-    pairing_url = f"{base_url}/pair"
+    scheme = request.url.scheme
+    port = request.url.port or 8000
+    host_base = _build_base_url(request)
+    lan_base = f"{scheme}://{local_ip}:{port}"
+    pairing_url = f"{lan_base}/pair"
     
     return {
-        "endpoint": base_url,
+        "endpoint": host_base,
+        "endpoint_lan": lan_base,
         "pairing_url": pairing_url,
         "qr_code": generate_qr_code(pairing_url),
         "local_ip": local_ip,
-        "port": request.url.port,
+        "port": port,
         "instructions": [
             "1. Scan the QR code with your mobile device camera",
             "2. This will open the pairing page in your browser",
