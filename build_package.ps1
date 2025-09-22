@@ -13,11 +13,16 @@ $frontendDir = Join-Path $repoRoot 'frontend'
 $backendDir = Join-Path $repoRoot 'backend'
 $backendVenv = Join-Path $backendDir '.venv'
 
-# Clean previous build artifacts to avoid stale names (e.g., autism_tracker_setup)
+# Clean previous build artifacts but keep user data/models in root dist
 Write-Host "[1.1/6] Cleaning old build artifacts" -ForegroundColor DarkCyan
 if (Test-Path (Join-Path $backendDir 'build')) { Remove-Item -Recurse -Force (Join-Path $backendDir 'build') }
 if (Test-Path (Join-Path $backendDir 'dist')) { Remove-Item -Recurse -Force (Join-Path $backendDir 'dist') }
-if (Test-Path (Join-Path $repoRoot 'dist'))     { Remove-Item -Recurse -Force (Join-Path $repoRoot 'dist') }
+if (Test-Path (Join-Path $repoRoot 'dist')) {
+  Get-ChildItem -LiteralPath (Join-Path $repoRoot 'dist') | ForEach-Object {
+    if ($_.Name -in @('models','data')) { return }
+    Remove-Item -Recurse -Force $_.FullName
+  }
+}
 
 if (-not (Test-Path $frontendDir)) { throw "Missing frontend directory: $frontendDir" }
 if (-not (Test-Path $backendDir)) { throw "Missing backend directory: $backendDir" }
@@ -88,8 +93,8 @@ robocopy (Join-Path $frontendDir 'build') (Join-Path $distDir 'pwa') /MIR | Out-
 $rootModels = Join-Path $distDir 'models'
 if (Test-Path (Join-Path $backendDir 'models')) {
   if (-not (Test-Path $rootModels)) { New-Item -ItemType Directory -Path $rootModels | Out-Null }
-  Write-Host "Copying backend/models to dist/models" -ForegroundColor DarkCyan
-  robocopy (Join-Path $backendDir 'models') $rootModels *.gguf /S | Out-Null
+  Write-Host "Syncing backend/models to dist/models (non-destructive)" -ForegroundColor DarkCyan
+  robocopy (Join-Path $backendDir 'models') $rootModels *.gguf /S /XO | Out-Null
 }
 
 Write-Host "✅ Build complete!" -ForegroundColor Green

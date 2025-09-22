@@ -319,12 +319,25 @@ def start_backend(models_dir: Path):
             print("")
         except Exception as e:
             logging.info(f"Console QR printing skipped: {e}")
+        # Copy pairing URL to clipboard on Windows for convenience
+        try:
+            if sys.platform.startswith('win'):
+                subprocess.run(['clip'], input=pairing_url, text=True, check=False)
+                print("(Pairing URL copied to clipboard)")
+        except Exception as e:
+            logging.info(f"Clipboard copy skipped: {e}")
         print("Press Ctrl+C to stop")
         print(f"Logs are saved to: {log_file}")
 
         # Run HTTP and HTTPS servers in parallel
         def run_http():
-            uvicorn.run(app, host="0.0.0.0", port=8000)
+            uvicorn.run(
+                app,
+                host="0.0.0.0",
+                port=8000,
+                log_level="warning",
+                access_log=False,
+            )
 
         def run_https():
             uvicorn.run(
@@ -333,6 +346,8 @@ def start_backend(models_dir: Path):
                 port=8443,
                 ssl_certfile=str(cert_file),
                 ssl_keyfile=str(key_file),
+                log_level="warning",
+                access_log=False,
             )
 
         with ThreadPoolExecutor(max_workers=2) as pool:
