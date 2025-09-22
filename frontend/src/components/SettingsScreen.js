@@ -52,7 +52,7 @@ const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, 
       input_mode: 'voice',
       llm_model: 'llama2',
       theme: 'light',
-      speech: { silence_timeout_ms: 5000 },
+      speech: { silence_timeout_ms: 10000 },
       accessibility: {
         high_contrast: false,
         large_text: false,
@@ -242,7 +242,7 @@ const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, 
         <select
           id="silence-timeout"
           className="setting-input"
-          value={(localSettings.speech && localSettings.speech.silence_timeout_ms) || 5000}
+          value={(localSettings.speech && localSettings.speech.silence_timeout_ms) || 10000}
           onChange={(e) => {
             const val = parseInt(e.target.value, 10);
             setLocalSettings(prev => ({
@@ -254,6 +254,7 @@ const SettingsScreen = ({ settings, onSettingsUpdate, onNavigate, onDisconnect, 
           <option value={3000}>3 seconds</option>
           <option value={5000}>5 seconds</option>
           <option value={8000}>8 seconds</option>
+          <option value={10000}>10 seconds</option>
         </select>
         <p className="setting-description">How long the app should wait in silence before auto-stopping voice input.</p>
       </div>

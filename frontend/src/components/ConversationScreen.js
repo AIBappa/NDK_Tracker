@@ -64,23 +64,12 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
       return;
     }
 
-    // Many browsers require a secure context (HTTPS/localhost) for mic access
-    const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-    if (!window.isSecureContext && !isLocalhost) {
-      alert('Voice input requires a secure connection. Please install the app (Add to Home Screen) or enable HTTPS on the backend. Switching to Text input.');
-      setShowTextInput(true);
-      setTimeout(() => textAreaRef.current?.focus(), 50);
-      return;
-    }
+    // Many browsers require a secure context (HTTPS/localhost) for mic access.
+    // However, on some Android devices or installed shortcuts, mic may still work.
+    // We'll attempt to proceed and gracefully fallback on error.
 
-    // Request microphone permission proactively
-    const micOk = await speechService.requestMicrophonePermission();
-    if (!micOk) {
-      alert('Microphone permission denied. Please allow microphone access and try again.');
-      setShowTextInput(true);
-      setTimeout(() => textAreaRef.current?.focus(), 50);
-      return;
-    }
+    // Do not preflight microphone permission with getUserMedia.
+    // Some environments allow SpeechRecognition even when getUserMedia is restricted.
 
     try {
       setIsListening(true);
@@ -350,23 +339,34 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
             <p className="prompt-help">
               You can share details about food, medication, behavior, exercise, water, potty, school and more. You can also add or adjust entries later from the Timeline screen.
             </p>
-            
-            {transcript && (
-              <div className="transcript">
-                <p><em>"{transcript}"</em></p>
-              </div>
-            )}
-            
-            {isProcessing && (
-              <div className="processing-indicator">
-                <div className="spinner"></div>
-                <p>Processing your input...</p>
-              </div>
-            )}
           </div>
           
           <div className="input-actions">
             {getInputModeButtons()}
+          </div>
+
+          {(isListening || transcript) && (
+            <div className="transcript">
+              {isListening && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: transcript ? '6px' : 0 }}>
+                  <span className="mic-badge" aria-live="polite" title="Microphone active">🎙️ Listening</span>
+                  <span className="timeout-hint">(auto-stops after {Math.round(((settings && settings.speech && settings.speech.silence_timeout_ms) || 10000)/1000)}s)</span>
+                </div>
+              )}
+              {transcript && (
+                <p style={{ margin: 0 }}><em>"{transcript}"</em></p>
+              )}
+            </div>
+          )}
+
+          {isProcessing && (
+            <div className="processing-indicator">
+              <div className="spinner"></div>
+              <p>Processing your input...</p>
+            </div>
+          )}
+
+          <div className="input-actions secondary-actions">
             <button 
               className="btn btn-secondary quit-btn"
               onClick={quitSession}
