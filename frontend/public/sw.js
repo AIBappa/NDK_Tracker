@@ -1,13 +1,14 @@
 /* eslint-env serviceworker */
+/* eslint-disable no-restricted-globals */
 const CACHE_NAME = 'ndk-tracker-cache-v2';
-const OFFLINE_URLS = [
-  `${self.registration.scope}`,
-  `${self.registration.scope}index.html`,
-  `${self.registration.scope}manifest.json`,
-  `${self.registration.scope}favicon.ico`,
-];
+let OFFLINE_URLS;
 
 self.addEventListener('install', (event) => {
+  const OFFLINE_URLS = [
+    self.registration.scope,
+    self.registration.scope + 'index.html',
+    self.registration.scope + 'manifest.json',
+  ];
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS))
   );
