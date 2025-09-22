@@ -19,12 +19,12 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/pwa/",
   "display": "standalone",
   "theme_color": "#2196f3",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
-  "scope": "/",
+  "scope": "/pwa/",
   "categories": ["health", "medical", "family", "accessibility"],
   "screenshots": [
     {

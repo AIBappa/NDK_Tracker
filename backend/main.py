@@ -11,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from zeroconf import ServiceInfo, Zeroconf
@@ -61,6 +61,14 @@ if frontend_dir.exists():
     print(f"PWA mounted at /pwa from {frontend_dir}")
 else:
     print(f"PWA files not found at {frontend_dir}")
+
+@app.get("/pwa", response_class=HTMLResponse)
+async def pwa_root():
+    """Serve PWA index for /pwa (no trailing slash) to prevent 307 redirect issues"""
+    index_path = Path(frontend_dir) / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    raise HTTPException(status_code=404, detail="PWA not built. Run npm run build in frontend/")
 
 # CORS middleware to allow PWA access
 app.add_middleware(
@@ -452,10 +460,10 @@ def generate_qr_code(data: str) -> str:
 
 # API Endpoints
 
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    """Root endpoint with web interface"""
-    return templates.TemplateResponse("index.html", {"request": request})
+@app.get("/")
+async def root():
+    """Redirect root to pairing page for clearer onboarding"""
+    return RedirectResponse(url="/pair", status_code=307)
 
 @app.get("/status", response_class=HTMLResponse)
 async def status_page(request: Request):

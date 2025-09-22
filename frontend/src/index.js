@@ -4,9 +4,13 @@ import './index.css';
 import App from './App';
 
 // Register service worker for PWA functionality
+// When hosting under a subpath (e.g., /pwa), use PUBLIC_URL to ensure correct scope
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    const swUrl = `${process.env.PUBLIC_URL}/sw.js`;
+    const scope = `${process.env.PUBLIC_URL}/`;
+    navigator.serviceWorker
+      .register(swUrl, { scope })
       .then((registration) => {
         console.log('SW registered: ', registration);
       })
