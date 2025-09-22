@@ -41,6 +41,23 @@ class SettingsConfig(BaseModel):
 
 # Initialize FastAPI app
 app = FastAPI(title="NDK Tracker Backend", version="1.0.0")
+# Serve local CA certificate for trust on devices
+@app.get("/cert/ca")
+async def get_ca_certificate():
+    try:
+        models_dir = os.environ.get("NDK_MODELS_DIR")
+        if models_dir:
+            ca_path = Path(models_dir) / "certs" / "ndk_local_ca.crt"
+        else:
+            # Fallback to ./models for dev
+            ca_path = Path("./models/certs/ndk_local_ca.crt")
+        if not ca_path.exists():
+            raise HTTPException(status_code=404, detail="CA certificate not found")
+        return FileResponse(str(ca_path), media_type="application/x-x509-ca-cert", filename="ndk_local_ca.crt")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Failed to read CA: {e}"})
 
 # Initialize templates with PyInstaller-compatible path
 import sys

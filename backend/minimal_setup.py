@@ -213,11 +213,14 @@ def start_backend(models_dir: Path):
         import uvicorn
         logging.info("Backend imported successfully!")
 
-        # Prepare HTTPS certificate
+        # Prepare HTTPS certificate (Local CA -> issue server cert)
         certs_dir = models_dir / "certs"
         certs_dir.mkdir(parents=True, exist_ok=True)
-        cert_file = certs_dir / "ndk_selfsigned.crt"
-        key_file = certs_dir / "ndk_selfsigned.key"
+        # Expose models dir to the app so routes can locate the CA
+        try:
+            os.environ["NDK_MODELS_DIR"] = str(models_dir)
+        except Exception:
+            pass
 
         def get_local_ip() -> str:
             try:
@@ -252,26 +255,20 @@ def start_backend(models_dir: Path):
                 pass
             return ip
 
-        def ensure_self_signed_cert():
+        def ensure_local_ca(certs_dir: Path) -> tuple[Path, Path]:
+            ca_key = certs_dir / "ndk_local_ca.key"
+            ca_crt = certs_dir / "ndk_local_ca.crt"
+            if ca_key.exists() and ca_crt.exists():
+                return ca_key, ca_crt
             try:
-                if cert_file.exists() and key_file.exists():
-                    return
-                logging.info("Generating self-signed certificate for HTTPS...")
+                logging.info("Generating local CA (one-time)...")
                 key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
                 subject = issuer = x509.Name([
                     x509.NameAttribute(NameOID.COUNTRY_NAME, u"US"),
-                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"NDK Tracker"),
-                    x509.NameAttribute(NameOID.COMMON_NAME, u"NDK Local"),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"NDK Tracker Local CA"),
+                    x509.NameAttribute(NameOID.COMMON_NAME, u"NDK Local CA"),
                 ])
-                alt_names = [x509.DNSName(u"localhost")]
-                # Add local IP as IP SAN
-                local_ip_for_san = get_local_ip()
-                try:
-                    alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip_for_san)))
-                except Exception:
-                    pass
-                san = x509.SubjectAlternativeName(alt_names)
-                cert = (
+                ca_cert = (
                     x509.CertificateBuilder()
                     .subject_name(subject)
                     .issuer_name(issuer)
@@ -279,32 +276,84 @@ def start_backend(models_dir: Path):
                     .serial_number(x509.random_serial_number())
                     .not_valid_before(datetime.utcnow() - timedelta(minutes=1))
                     .not_valid_after(datetime.utcnow() + timedelta(days=3650))
-                    .add_extension(san, critical=False)
+                    .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
                     .sign(key, hashes.SHA256())
                 )
-                with open(key_file, "wb") as f:
-                    f.write(
-                        key.private_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PrivateFormat.TraditionalOpenSSL,
-                            encryption_algorithm=serialization.NoEncryption(),
-                        )
-                    )
-                with open(cert_file, "wb") as f:
-                    f.write(cert.public_bytes(serialization.Encoding.PEM))
-                logging.info(f"Self-signed cert generated at {certs_dir}")
+                with open(ca_key, "wb") as f:
+                    f.write(key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=serialization.NoEncryption(),
+                    ))
+                with open(ca_crt, "wb") as f:
+                    f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
+                logging.info(f"Local CA created at {ca_crt}")
+                return ca_key, ca_crt
             except Exception:
-                logging.error("Failed to create self-signed cert:")
+                logging.error("Failed to create local CA:")
                 logging.error(traceback.format_exc())
+                raise
 
-        ensure_self_signed_cert()
+        def issue_server_cert(certs_dir: Path, ca_key_path: Path, ca_crt_path: Path, ip_addrs: list[str]) -> tuple[Path, Path]:
+            key_file = certs_dir / "server.key"
+            cert_file = certs_dir / "server.crt"
+            # Load CA
+            with open(ca_key_path, "rb") as f:
+                ca_key = serialization.load_pem_private_key(f.read(), password=None)
+            with open(ca_crt_path, "rb") as f:
+                ca_cert = x509.load_pem_x509_certificate(f.read())
 
+            # Build SANs
+            alt_names = [x509.DNSName(u"localhost")]
+            for ip in ip_addrs:
+                try:
+                    alt_names.append(x509.IPAddress(ipaddress.ip_address(ip)))
+                except Exception:
+                    pass
+            san = x509.SubjectAlternativeName(alt_names)
+
+            # Generate server key & cert
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            subject = x509.Name([
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"NDK Tracker"),
+                x509.NameAttribute(NameOID.COMMON_NAME, u"NDK Local Server"),
+            ])
+            cert = (
+                x509.CertificateBuilder()
+                .subject_name(subject)
+                .issuer_name(ca_cert.subject)
+                .public_key(key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(datetime.utcnow() - timedelta(minutes=1))
+                .not_valid_after(datetime.utcnow() + timedelta(days=825))
+                .add_extension(san, critical=False)
+                .sign(ca_key, hashes.SHA256())
+            )
+            with open(key_file, "wb") as f:
+                f.write(key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption(),
+                ))
+            with open(cert_file, "wb") as f:
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
+            logging.info(f"Issued server cert at {cert_file}")
+            return cert_file, key_file
+
+        # Determine IPs and ensure certs
         local_ip = get_lan_ip()
+        ca_key_path, ca_crt_path = ensure_local_ca(certs_dir)
+        ip_list = ["127.0.0.1"]
+        if local_ip and local_ip != "127.0.0.1":
+            ip_list.append(local_ip)
+        cert_file, key_file = issue_server_cert(certs_dir, ca_key_path, ca_crt_path, ip_list)
+
         print("Backend started successfully!")
         print(f"Access the API at: http://{local_ip}:8000 (HTTP)")
-        print(f"Also available at: https://{local_ip}:8443 (HTTPS, self-signed)")
+        print(f"Also available at: https://{local_ip}:8443 (HTTPS, trusted after installing local CA)")
         pairing_url = f"https://{local_ip}:8443/pair"
         print(f"Pairing page:     {pairing_url}")
+        print(f"Trust the local CA once on your phone: https://{local_ip}:8443/cert/ca")
         # Print QR in console for quick mobile scan
         try:
             qr = qrcode.QRCode(border=1)
