@@ -13,22 +13,19 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
 
   const textAreaRef = useRef(null);
 
+  // Initialize conversation once
   useEffect(() => {
-    // Initialize conversation
     startNewSession();
-    
-    // Auto-focus text input if text mode is preferred
+  }, []);
+
+  // Auto-focus text input when input mode switches to text
+  useEffect(() => {
     if (settings.input_mode === 'text' && textAreaRef.current) {
       textAreaRef.current.focus();
     }
-  }, []);
+  }, [settings.input_mode]);
 
-  useEffect(() => {
-    // Speak the current prompt if voice is enabled
-    if (settings.input_mode !== 'text' && speechService.isSupported && currentPrompt) {
-      speechService.speak(currentPrompt);
-    }
-  }, [currentPrompt, settings.input_mode]);
+  // Do not auto-speak the prompt. Per design, speaking should only happen in response to user action.
 
   const startNewSession = () => {
     const newSessionId = `session_${Date.now()}`;
@@ -45,8 +42,29 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
       return;
     }
 
+    // Check browser support and security context requirements
     if (!speechService.isSupported) {
-      alert('Speech recognition is not supported in your browser.');
+      alert('Voice input is not supported in this browser. Please use Text, or try Chrome on Android.');
+      setShowTextInput(true);
+      setTimeout(() => textAreaRef.current?.focus(), 50);
+      return;
+    }
+
+    // Many browsers require a secure context (HTTPS/localhost) for mic access
+    const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (!window.isSecureContext && !isLocalhost) {
+      alert('Voice input requires a secure connection. Please install the app (Add to Home Screen) or enable HTTPS on the backend. Switching to Text input.');
+      setShowTextInput(true);
+      setTimeout(() => textAreaRef.current?.focus(), 50);
+      return;
+    }
+
+    // Request microphone permission proactively
+    const micOk = await speechService.requestMicrophonePermission();
+    if (!micOk) {
+      alert('Microphone permission denied. Please allow microphone access and try again.');
+      setShowTextInput(true);
+      setTimeout(() => textAreaRef.current?.focus(), 50);
       return;
     }
 
@@ -66,7 +84,9 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
         (error) => {
           setIsListening(false);
           console.error('Speech recognition error:', error);
-          alert('Voice input failed. Please try again or use text input.');
+          alert('Voice input failed. Please try again or use Text.');
+          setShowTextInput(true);
+          setTimeout(() => textAreaRef.current?.focus(), 50);
         },
         () => {
           setIsListening(false);

@@ -34,6 +34,15 @@ import requests
 import time
 import logging
 import traceback
+import ipaddress
+import socket
+from concurrent.futures import ThreadPoolExecutor
+
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from datetime import datetime, timedelta
 
 # Minimal model - smaller GGUF for easier distribution
 MINIMAL_MODEL = {
@@ -204,12 +213,94 @@ def start_backend(models_dir: Path):
         import uvicorn
 
         logging.info("Backend imported successfully!")
+
+        # Prepare HTTPS certificate
+        certs_dir = models_dir / "certs"
+        certs_dir.mkdir(parents=True, exist_ok=True)
+        cert_file = certs_dir / "ndk_selfsigned.crt"
+        key_file = certs_dir / "ndk_selfsigned.key"
+
+        def get_local_ip() -> str:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+                return ip
+            except Exception:
+                return "127.0.0.1"
+
+        def ensure_self_signed_cert():
+            try:
+                if cert_file.exists() and key_file.exists():
+                    return
+                logging.info("Generating self-signed certificate for HTTPS...")
+                key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+                subject = issuer = x509.Name([
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, u"US"),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"NDK Tracker"),
+                    x509.NameAttribute(NameOID.COMMON_NAME, u"NDK Local"),
+                ])
+                alt_names = [
+                    x509.DNSName(u"localhost"),
+                ]
+                # Add local IP as IP SAN
+                local_ip = get_local_ip()
+                try:
+                    alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
+                except Exception:
+                    pass
+                san = x509.SubjectAlternativeName(alt_names)
+                cert = (
+                    x509.CertificateBuilder()
+                    .subject_name(subject)
+                    .issuer_name(issuer)
+                    .public_key(key.public_key())
+                    .serial_number(x509.random_serial_number())
+                    .not_valid_before(datetime.utcnow() - timedelta(minutes=1))
+                    .not_valid_after(datetime.utcnow() + timedelta(days=3650))
+                    .add_extension(san, critical=False)
+                    .sign(key, hashes.SHA256())
+                )
+                with open(key_file, "wb") as f:
+                    f.write(
+                        key.private_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PrivateFormat.TraditionalOpenSSL,
+                            encryption_algorithm=serialization.NoEncryption(),
+                        )
+                    )
+                with open(cert_file, "wb") as f:
+                    f.write(cert.public_bytes(serialization.Encoding.PEM))
+                logging.info(f"Self-signed cert generated at {certs_dir}")
+            except Exception:
+                logging.error("Failed to create self-signed cert:")
+                logging.error(traceback.format_exc())
+
+        ensure_self_signed_cert()
+
         print("Backend started successfully!")
-        print("Access the API at: http://localhost:8000")
+        print("Access the API at: http://localhost:8000 (HTTP)")
+        print("Also available at: https://<your-ip>:8443 (HTTPS, self-signed)")
         print("Press Ctrl+C to stop")
         print(f"Logs are saved to: {log_file}")
 
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        # Run HTTP and HTTPS servers in parallel
+        def run_http():
+            uvicorn.run(app, host="0.0.0.0", port=8000)
+
+        def run_https():
+            uvicorn.run(
+                app,
+                host="0.0.0.0",
+                port=8443,
+                ssl_certfile=str(cert_file),
+                ssl_keyfile=str(key_file),
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pool.submit(run_http)
+            run_https()
 
     except ImportError as e:
         error_msg = f"Error importing backend: {e}"

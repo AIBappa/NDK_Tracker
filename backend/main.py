@@ -502,7 +502,11 @@ async def pairing_page(request: Request):
     local_ip = get_local_ip()
     scheme = request.url.scheme
     port = request.url.port or 8000
-    lan_base = f"{scheme}://{local_ip}:{port}"
+    # Prefer HTTPS port 8443 if available
+    https_port = 8443
+    lan_https = f"https://{local_ip}:{https_port}"
+    lan_http = f"http://{local_ip}:{port}"
+    lan_base = lan_https
     # Pass backend URL to PWA so it can auto-configure on first launch
     pwa_url = f"{lan_base}/pwa?backend={lan_base}"
     api_endpoint = lan_base
@@ -522,19 +526,22 @@ async def get_pairing_info(request: Request):
     scheme = request.url.scheme
     port = request.url.port or 8000
     host_base = _build_base_url(request)
-    lan_base = f"{scheme}://{local_ip}:{port}"
-    pairing_url = f"{lan_base}/pair"
+    https_port = 8443
+    lan_https = f"https://{local_ip}:{https_port}"
+    lan_http = f"http://{local_ip}:{port}"
+    pairing_url = f"{lan_https}/pair"
     
     return {
         "endpoint": host_base,
-        "endpoint_lan": lan_base,
+        "endpoint_lan": lan_https,
+        "endpoint_lan_http": lan_http,
         "pairing_url": pairing_url,
         "qr_code": generate_qr_code(pairing_url),
         "local_ip": local_ip,
         "port": port,
         "instructions": [
             "1. Scan the QR code with your mobile device camera",
-            "2. This will open the pairing page in your browser",
+            "2. This will open the pairing page in your browser (you may need to accept a self-signed certificate warning)",
             "3. Tap 'Install PWA' to download the NDK Tracker app",
             "4. Open the installed PWA and it will connect automatically"
         ]

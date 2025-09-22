@@ -260,6 +260,14 @@
                 const preferredEndpoint = data.endpoint_lan || data.endpoint;
                 document.getElementById('endpoint-url').textContent = preferredEndpoint;
                 document.getElementById('local-ip').textContent = data.local_ip;
+                // Show HTTP fallback if provided
+                if (data.endpoint_lan_http) {
+                    const info = document.getElementById('endpoint-info');
+                    const p = document.createElement('div');
+                    p.style.marginTop = '8px';
+                    p.innerHTML = `<strong>HTTP fallback:</strong> ${data.endpoint_lan_http}`;
+                    info.appendChild(p);
+                }
                 
             } catch (error) {
                 console.error('Failed to load pairing info:', error);
