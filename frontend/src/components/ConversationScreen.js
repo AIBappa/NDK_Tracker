@@ -50,7 +50,8 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
 
   const handleVoiceInput = async () => {
     if (isListening) {
-      speechService.stopListening();
+      // On manual stop, emit the final combined transcript once
+      speechService.stopListening({ emitFinal: true });
       setIsListening(false);
       return;
     }
@@ -366,29 +367,6 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
           
           <div className="input-actions">
             {getInputModeButtons()}
-            {isListening && (
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  const finalText = (transcript || '').trim();
-                  speechService.stopListening();
-                  setIsListening(false);
-                  // cleanup mic level
-                  if (rafRef.current) cancelAnimationFrame(rafRef.current);
-                  if (audioContextRef.current) audioContextRef.current.close();
-                  if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
-                  rafRef.current = null;
-                  audioContextRef.current = null;
-                  micStreamRef.current = null;
-                  if (finalText) {
-                    submitInput(finalText, true);
-                  }
-                }}
-                aria-label="Stop listening"
-              >
-                Stop
-              </button>
-            )}
             <button 
               className="btn btn-secondary quit-btn"
               onClick={quitSession}

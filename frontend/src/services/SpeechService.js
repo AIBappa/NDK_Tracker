@@ -5,6 +5,13 @@ export class SpeechService {
     this.isSupported = this.checkSupport();
     this.isListening = false;
     this.voices = [];
+    // Internals for managing callbacks and transcript aggregation
+    this._onResult = null;
+    this._onEnd = null;
+    this._onError = null;
+    this._silenceTimer = null;
+    this._aggregatedFinal = '';
+    this._lastInterim = '';
     
     // Initialize speech recognition if supported
     if (this.isSupported) {
@@ -55,9 +62,13 @@ export class SpeechService {
     const silenceMs = typeof options.silenceMs === 'number' ? options.silenceMs : 5000;
     const stopOnSilence = options.stopOnSilence !== false; // default true
     const stopOnFinal = options.stopOnFinal === true; // default false
-    let silenceTimer = null;
-    let aggregatedFinal = '';
-    let lastInterim = '';
+    // Store callbacks and reset internals
+    this._onResult = onResult || null;
+    this._onEnd = onEnd || null;
+    this._onError = onError || null;
+    this._silenceTimer = null;
+    this._aggregatedFinal = '';
+    this._lastInterim = '';
     
     this.recognition.onresult = (event) => {
       let finalTranscript = '';
@@ -74,32 +85,32 @@ export class SpeechService {
 
       // Aggregate results
       if (finalTranscript) {
-        aggregatedFinal += (aggregatedFinal ? ' ' : '') + finalTranscript.trim();
+        this._aggregatedFinal += (this._aggregatedFinal ? ' ' : '') + finalTranscript.trim();
       }
-      lastInterim = interimTranscript.trim();
+      this._lastInterim = interimTranscript.trim();
 
       // Callback to UI for live display
-      if (onResult) {
-        onResult({
-          final: aggregatedFinal,
-          interim: lastInterim,
+      if (this._onResult) {
+        this._onResult({
+          final: this._aggregatedFinal,
+          interim: this._lastInterim,
           isFinal: stopOnFinal && finalTranscript.length > 0
         });
       }
 
       // Reset silence timer on any result
       if (stopOnSilence) {
-        if (silenceTimer) clearTimeout(silenceTimer);
-        silenceTimer = setTimeout(() => {
+        if (this._silenceTimer) clearTimeout(this._silenceTimer);
+        this._silenceTimer = setTimeout(() => {
           // Consider whatever we have as the final transcript
-          const combined = (aggregatedFinal + ' ' + lastInterim).trim();
+          const combined = (this._aggregatedFinal + ' ' + this._lastInterim).trim();
           try {
             this.stopListening();
           } finally {
-            if (onResult && combined) {
-              onResult({ final: combined, interim: '', isFinal: true });
+            if (this._onResult && combined) {
+              this._onResult({ final: combined, interim: '', isFinal: true });
             }
-            if (onEnd) onEnd();
+            if (this._onEnd) this._onEnd();
           }
         }, silenceMs);
       }
@@ -107,26 +118,40 @@ export class SpeechService {
 
     this.recognition.onerror = (event) => {
       this.isListening = false;
-      if (silenceTimer) clearTimeout(silenceTimer);
-      if (onError) onError(event.error);
+      if (this._silenceTimer) clearTimeout(this._silenceTimer);
+      if (this._onError) this._onError(event.error);
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
-      if (silenceTimer) clearTimeout(silenceTimer);
-      if (onEnd) onEnd();
+      if (this._silenceTimer) clearTimeout(this._silenceTimer);
+      if (this._onEnd) this._onEnd();
     };
 
     try {
       this.recognition.start();
     } catch (error) {
       this.isListening = false;
-      if (onError) onError(error);
+      if (this._onError) this._onError(error);
     }
   }
 
-  stopListening() {
+  stopListening(options = {}) {
+    const { emitFinal = false } = options;
     if (this.recognition && this.isListening) {
+      // Optionally emit a final combined result before stopping
+      if (emitFinal && this._onResult) {
+        const combined = (this._aggregatedFinal + ' ' + this._lastInterim).trim();
+        if (combined) {
+          try {
+            this._onResult({ final: combined, interim: '', isFinal: true });
+          } catch (_) { /* noop */ }
+        }
+      }
+      if (this._silenceTimer) {
+        clearTimeout(this._silenceTimer);
+        this._silenceTimer = null;
+      }
       this.recognition.stop();
       this.isListening = false;
     }
