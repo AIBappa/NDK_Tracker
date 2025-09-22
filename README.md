@@ -1,6 +1,6 @@
 # NDK Tracker
 
-A privacy-first family health tracker PWA for neurodiverse children with local data storage and voice-first interaction.
+A privacy-first family health tracker PWA for Neurodiverse children with local data storage and voice-first interaction.
 
 This README documents two audiences and workflows:
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DataSet, Timeline } from 'vis-timeline/standalone';
 
 const TimelineScreen = ({ apiService, onNavigate }) => {
@@ -23,17 +23,7 @@ const TimelineScreen = ({ apiService, onNavigate }) => {
     { id: 'school', name: 'School', color: '#607d8b' }
   ];
 
-  useEffect(() => {
-    loadTimelineData();
-  }, [selectedDateRange, customStartDate, customEndDate]);
-
-  useEffect(() => {
-    if (timelineData && timelineRef.current) {
-      renderTimeline();
-    }
-  }, [timelineData, selectedCategories]);
-
-  const getDateRange = () => {
+  const getDateRange = useCallback(() => {
     const now = new Date();
     let startDate, endDate;
 
@@ -69,9 +59,9 @@ const TimelineScreen = ({ apiService, onNavigate }) => {
       start: startDate.toISOString().split('T')[0],
       end: endDate.toISOString().split('T')[0]
     };
-  };
+  }, [selectedDateRange, customStartDate, customEndDate]);
 
-  const loadTimelineData = async () => {
+  const loadTimelineData = useCallback(async () => {
     setIsLoading(true);
     setError('');
 
@@ -85,9 +75,21 @@ const TimelineScreen = ({ apiService, onNavigate }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiService, getDateRange]);
 
-  const renderTimeline = () => {
+  useEffect(() => {
+    loadTimelineData();
+  }, [loadTimelineData]);
+
+  const showItemDetails = useCallback((item) => {
+    // Find the original item data
+    const originalItem = timelineData.items.find(i => i.id === item.id);
+    if (originalItem) {
+      alert(`${originalItem.category.toUpperCase()}\n\nContent: ${originalItem.content}\nTime: ${new Date(originalItem.start).toLocaleString()}\nSession: ${originalItem.session_id}`);
+    }
+  }, [timelineData]);
+
+  const renderTimeline = useCallback(() => {
     if (!timelineData || !timelineRef.current) return;
 
     // Filter items by selected categories
@@ -151,15 +153,17 @@ const TimelineScreen = ({ apiService, onNavigate }) => {
         showItemDetails(selectedItem);
       }
     });
-  };
+  }, [timelineData, selectedCategories, showItemDetails]);
 
-  const showItemDetails = (item) => {
-    // Find the original item data
-    const originalItem = timelineData.items.find(i => i.id === item.id);
-    if (originalItem) {
-      alert(`${originalItem.category.toUpperCase()}\n\nContent: ${originalItem.content}\nTime: ${new Date(originalItem.start).toLocaleString()}\nSession: ${originalItem.session_id}`);
+  useEffect(() => {
+    if (timelineData && timelineRef.current) {
+      renderTimeline();
     }
-  };
+  }, [timelineData, selectedCategories, renderTimeline]);
+
+
+
+  // showItemDetails is now memoized above
 
   const toggleCategory = (categoryId) => {
     const newSelected = new Set(selectedCategories);
@@ -203,122 +207,124 @@ const TimelineScreen = ({ apiService, onNavigate }) => {
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="timeline-controls">
-        <div className="card">
-          {/* Date Range Selection */}
-          <div className="control-group">
-            <label>Time Range:</label>
-            <div className="date-range-buttons">
-              {['today', 'week', 'month', 'custom'].map(range => (
-                <button
-                  key={range}
-                  className={`btn ${selectedDateRange === range ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setSelectedDateRange(range)}
+      {/* Controls + Timeline Layout */}
+      <div className="timeline-layout">
+        <aside className="timeline-sidebar">
+          <div className="card">
+            {/* Date Range Selection */}
+            <div className="control-group">
+              <label>Time Range:</label>
+              <div className="date-range-buttons">
+                {['today', 'week', 'month', 'custom'].map(range => (
+                  <button
+                    key={range}
+                    className={`btn ${selectedDateRange === range ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setSelectedDateRange(range)}
+                    disabled={isLoading}
+                  >
+                    {range.charAt(0).toUpperCase() + range.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {selectedDateRange === 'custom' && (
+                <div className="custom-date-inputs">
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    aria-label="Start date"
+                  />
+                  <span>to</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    aria-label="End date"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Category Filters */}
+            <div className="control-group">
+              <label>Categories:</label>
+              <div className="category-controls">
+                <button 
+                  className="btn btn-small"
+                  onClick={selectAllCategories}
                   disabled={isLoading}
                 >
-                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                  All
                 </button>
-              ))}
+                <button 
+                  className="btn btn-small"
+                  onClick={deselectAllCategories}
+                  disabled={isLoading}
+                >
+                  None
+                </button>
+              </div>
+              <div className="category-filters">
+                {categories.map(category => (
+                  <label key={category.id} className="category-filter">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.has(category.id)}
+                      onChange={() => toggleCategory(category.id)}
+                      disabled={isLoading}
+                    />
+                    <span 
+                      className="category-label"
+                      style={{ '--category-color': category.color }}
+                    >
+                      {category.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-            
-            {selectedDateRange === 'custom' && (
-              <div className="custom-date-inputs">
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  aria-label="Start date"
+          </div>
+        </aside>
+
+        <section className="timeline-main">
+          {/* Timeline Visualization */}
+          <div className="timeline-content">
+            {error && (
+              <div className="error-message">
+                <p>{error}</p>
+                <button className="btn btn-primary" onClick={loadTimelineData}>
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {isLoading && (
+              <div className="loading-indicator">
+                <div className="spinner"></div>
+                <p>Loading timeline data...</p>
+              </div>
+            )}
+
+            {!isLoading && !error && timelineData && (
+              <div className="timeline-container">
+                <div 
+                  ref={timelineRef} 
+                  className="timeline-visualization"
+                  role="img"
+                  aria-label="Activity timeline visualization"
                 />
-                <span>to</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  aria-label="End date"
-                />
+                {timelineData.items.length === 0 && (
+                  <div className="no-data-message">
+                    <p>No data found for the selected time range and categories.</p>
+                    <p>Try selecting a different date range or ensure you have logged some activities.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
-
-          {/* Category Filters */}
-          <div className="control-group">
-            <label>Categories:</label>
-            <div className="category-controls">
-              <button 
-                className="btn btn-small"
-                onClick={selectAllCategories}
-                disabled={isLoading}
-              >
-                All
-              </button>
-              <button 
-                className="btn btn-small"
-                onClick={deselectAllCategories}
-                disabled={isLoading}
-              >
-                None
-              </button>
-            </div>
-            
-            <div className="category-filters">
-              {categories.map(category => (
-                <label key={category.id} className="category-filter">
-                  <input
-                    type="checkbox"
-                    checked={selectedCategories.has(category.id)}
-                    onChange={() => toggleCategory(category.id)}
-                    disabled={isLoading}
-                  />
-                  <span 
-                    className="category-label"
-                    style={{ '--category-color': category.color }}
-                  >
-                    {category.name}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
 
-      {/* Timeline Visualization */}
-      <div className="timeline-content">
-        {error && (
-          <div className="error-message">
-            <p>{error}</p>
-            <button className="btn btn-primary" onClick={loadTimelineData}>
-              Try Again
-            </button>
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="loading-indicator">
-            <div className="spinner"></div>
-            <p>Loading timeline data...</p>
-          </div>
-        )}
-
-        {!isLoading && !error && timelineData && (
-          <div className="timeline-container">
-            <div 
-              ref={timelineRef} 
-              className="timeline-visualization"
-              role="img"
-              aria-label="Activity timeline visualization"
-            />
-            
-            {timelineData.items.length === 0 && (
-              <div className="no-data-message">
-                <p>No data found for the selected time range and categories.</p>
-                <p>Try selecting a different date range or ensure you have logged some activities.</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* Legend and Summary */}
       {timelineData && timelineData.items.length > 0 && (

@@ -22,7 +22,8 @@ export class SpeechService {
     
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
-      this.recognition.continuous = false;
+      // Use continuous mode so we can control stop behavior (e.g., silence timeout)
+      this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
     }
@@ -40,7 +41,7 @@ export class SpeechService {
   }
 
   // Speech Recognition (Speech-to-Text)
-  startListening(onResult, onError, onEnd) {
+  startListening(onResult, onError, onEnd, options = {}) {
     if (!this.isSupported || !this.recognition) {
       if (onError) onError(new Error('Speech recognition not supported'));
       return;
@@ -51,6 +52,12 @@ export class SpeechService {
     }
 
     this.isListening = true;
+    const silenceMs = typeof options.silenceMs === 'number' ? options.silenceMs : 5000;
+    const stopOnSilence = options.stopOnSilence !== false; // default true
+    const stopOnFinal = options.stopOnFinal === true; // default false
+    let silenceTimer = null;
+    let aggregatedFinal = '';
+    let lastInterim = '';
     
     this.recognition.onresult = (event) => {
       let finalTranscript = '';
@@ -65,22 +72,48 @@ export class SpeechService {
         }
       }
 
+      // Aggregate results
+      if (finalTranscript) {
+        aggregatedFinal += (aggregatedFinal ? ' ' : '') + finalTranscript.trim();
+      }
+      lastInterim = interimTranscript.trim();
+
+      // Callback to UI for live display
       if (onResult) {
         onResult({
-          final: finalTranscript,
-          interim: interimTranscript,
-          isFinal: finalTranscript.length > 0
+          final: aggregatedFinal,
+          interim: lastInterim,
+          isFinal: stopOnFinal && finalTranscript.length > 0
         });
+      }
+
+      // Reset silence timer on any result
+      if (stopOnSilence) {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          // Consider whatever we have as the final transcript
+          const combined = (aggregatedFinal + ' ' + lastInterim).trim();
+          try {
+            this.stopListening();
+          } finally {
+            if (onResult && combined) {
+              onResult({ final: combined, interim: '', isFinal: true });
+            }
+            if (onEnd) onEnd();
+          }
+        }, silenceMs);
       }
     };
 
     this.recognition.onerror = (event) => {
       this.isListening = false;
+      if (silenceTimer) clearTimeout(silenceTimer);
       if (onError) onError(event.error);
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
+      if (silenceTimer) clearTimeout(silenceTimer);
       if (onEnd) onEnd();
     };
 

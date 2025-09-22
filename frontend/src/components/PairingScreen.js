@@ -13,11 +13,7 @@ const PairingScreen = ({ onPairingSuccess, speechService }) => {
   const scannerRef = useRef(null);
 
   useEffect(() => {
-    // Announce pairing screen for accessibility
-    if (speechService && speechService.isSupported) {
-      speechService.speak('Pairing screen. Scan QR code or enter backend URL manually.');
-    }
-
+    // Avoid auto-speaking to prevent confusing or overlapping audio on start
     return () => {
       // Cleanup QR scanner on unmount
       if (scannerRef.current) {

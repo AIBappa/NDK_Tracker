@@ -74,8 +74,9 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
       
       speechService.startListening(
         (result) => {
+          // Show interim if available, else the aggregated final
           setTranscript(result.interim || result.final);
-          
+          // Do not auto-submit on first final token; submission happens on silence timeout or user press Stop
           if (result.isFinal && result.final.trim()) {
             setIsListening(false);
             submitInput(result.final, true);
@@ -90,7 +91,8 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
         },
         () => {
           setIsListening(false);
-        }
+        },
+        { silenceMs: 5000, stopOnSilence: true, stopOnFinal: false }
       );
     } catch (error) {
       setIsListening(false);
@@ -274,6 +276,9 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
         <div className="card">
           <div className="prompt-content">
             <h2>{currentPrompt}</h2>
+            <p className="prompt-help">
+              You can share details about food, medication, behavior, exercise, water, potty, school and more. You can also add or adjust entries later from the Timeline screen.
+            </p>
             
             {transcript && (
               <div className="transcript">
@@ -291,7 +296,22 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
           
           <div className="input-actions">
             {getInputModeButtons()}
-            
+            {isListening && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  const finalText = (transcript || '').trim();
+                  speechService.stopListening();
+                  setIsListening(false);
+                  if (finalText) {
+                    submitInput(finalText, true);
+                  }
+                }}
+                aria-label="Stop listening"
+              >
+                Stop
+              </button>
+            )}
             <button 
               className="btn btn-secondary quit-btn"
               onClick={quitSession}
@@ -403,7 +423,7 @@ const ConversationScreen = ({ apiService, speechService, settings, onNavigate })
             <div className="voice-wave"></div>
             <div className="voice-wave"></div>
           </div>
-          <p>Listening... Speak now</p>
+          <p>Listening... Speak now (auto-stops after 5s of silence or tap Stop)</p>
         </div>
       )}
     </div>

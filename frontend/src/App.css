@@ -14,7 +14,7 @@
 
 .App-header {
   background-color: #282c34;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   color: white;
   display: flex;
   justify-content: space-between;
@@ -26,11 +26,26 @@
   font-size: 1.5rem;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .connection-status {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
+  background: #3a3f47;
+  padding: 4px 8px;
+  border-radius: 999px;
 }
 
 .status-dot {
@@ -48,6 +63,13 @@
   flex: 1;
   padding: 1rem;
   background-color: #f5f5f5;
+}
+
+/* Prompt help text */
+.prompt-help {
+  color: #666;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
 }
 
 /* Button Styles */
@@ -253,6 +275,14 @@
     flex-direction: column;
     gap: 0.5rem;
   }
+  .header-left {
+    width: 100%;
+    justify-content: center;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+  }
   
   .App-header h1 {
     font-size: 1.3rem;
@@ -289,4 +319,39 @@ select:focus {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Timeline layout */
+.timeline-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1rem;
+}
+
+.timeline-sidebar .category-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.timeline-sidebar .category-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timeline-sidebar .category-label::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: var(--category-color, #ccc);
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+@media (max-width: 900px) {
+  .timeline-layout {
+    grid-template-columns: 1fr;
+  }
 }

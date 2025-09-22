@@ -233,28 +233,32 @@ function App() {
   return (
     <div className={`App ${settings.theme}`}>
       <header className="App-header">
-        <h1>NDK Tracker</h1>
-        {isConnected && (
-          <div className="connection-status connected">
-            <span className="status-dot"></span>
-            Connected
-          </div>
-        )}
-        {/* Simple install CTA if supported */}
-        {deferredPrompt && (
-          <button
-            className="btn btn-secondary"
-            onClick={async () => {
-              deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              if (outcome === 'accepted') {
-                // User accepted install; await appinstalled event
-              }
-            }}
-          >
-            Install App
-          </button>
-        )}
+        <div className="header-left">
+          <h1>NDK Tracker</h1>
+          {isConnected && (
+            <div className="connection-status connected" title="Connected to backend">
+              <span className="status-dot"></span>
+              Connected
+            </div>
+          )}
+        </div>
+        <div className="header-actions">
+          {/* Simple install CTA if supported */}
+          {deferredPrompt && (
+            <button
+              className="btn btn-secondary"
+              onClick={async () => {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                  // User accepted install; await appinstalled event
+                }
+              }}
+            >
+              Install App
+            </button>
+          )}
+        </div>
       </header>
       
       <main className="App-main">
